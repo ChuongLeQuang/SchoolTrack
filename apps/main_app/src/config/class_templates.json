@@ -1,0 +1,64 @@
+{
+    "locations": [
+        "Cơ sở Q9",
+        "Cơ sở Q1",
+        "Cơ sở Bình Thạnh",
+        "Cơ sở Chính"
+    ],
+    "sessions": [
+        "Sáng",
+        "Chiều",
+        "Tối"
+    ],
+    "schedules": [
+        "2-4-6",
+        "3-5-7",
+        "T7-CN",
+        "4-6"
+    ],
+    "time_slots": [
+        "08:00 - 10:00",
+        "14:00 - 16:00",
+        "18:00 - 20:00",
+        "08:15 - 10:15",
+        "10:00 - 12:00"
+    ],
+    "class_templates": {
+        "NE": {
+            "name": "Tiếng Anh Level 1",
+            "min": 15,
+            "max": 30,
+            "session": "Tối",
+            "schedule": "2-4-6",
+            "time_slot": "18:00 - 20:00",
+            "location": "Cơ sở Q9"
+        },
+        "ND": {
+            "name": "Tiếng Anh Level 2",
+            "min": 15,
+            "max": 30,
+            "session": "Tối",
+            "schedule": "2-4-6",
+            "time_slot": "18:00 - 20:00",
+            "location": "Cơ sở Q9"
+        },
+        "NG": {
+            "name": "Tiếng Anh Level 3",
+            "min": 15,
+            "max": 25,
+            "session": "Tối",
+            "schedule": "2-4-6",
+            "time_slot": "18:00 - 20:00",
+            "location": "Cơ sở Q9"
+        },
+        "NQ": {
+            "name": "Tiếng Anh Level 4",
+            "min": 15,
+            "max": 20,
+            "session": "Tối",
+            "schedule": "2-4-6",
+            "time_slot": "18:00 - 20:00",
+            "location": "Cơ sở Q9"
+        }
+    }
+}
