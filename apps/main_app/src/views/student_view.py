@@ -2,8 +2,10 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                              QLineEdit, QComboBox, QPushButton, 
                              QTableWidget, QLabel, QHeaderView, QTableWidgetItem, QMessageBox)
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QPixmap
 import os
+import sys
+import logging
 from datetime import datetime
 from apps.main_app.src.services.student_service import StudentService
 from apps.main_app.src.models.entities import Student
@@ -18,9 +20,8 @@ class StudentView(QWidget):
     
     def __init__(self) -> None:
         super().__init__()
+        self.is_data_loaded = False
         self._setup_ui()
-        # Trì hoãn 500ms để đảm bảo giao diện được vẽ xong hoàn toàn trước khi đọc file
-        QTimer.singleShot(500, self.load_data)
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout()
@@ -109,11 +110,11 @@ class StudentView(QWidget):
         EN: Load student data from Excel and populate the table.
         VI: Đọc dữ liệu sinh viên từ file Excel và điền vào bảng.
         """
-        print("⏳ Đang tiến hành đọc file Excel, vui lòng đợi...")
+        logging.info("⏳ Đang tiến hành đọc file Excel, vui lòng đợi...")
         
         # Sử dụng đường dẫn tuyệt đối để đảm bảo luôn tìm thấy file
         file_path = StudentService.get_file_path()
-        print(f"📂 Đang tìm file tại: {file_path}")
+        logging.info(f"📂 Đang tìm file tại: {file_path}")
         
         try:
             students = StudentService.get_students_from_excel(file_path)
@@ -158,8 +159,9 @@ class StudentView(QWidget):
             tam_nghi = sum(1 for s in students if s.study_status.lower() == "tạm nghỉ")
             nghi_hoc = sum(1 for s in students if s.study_status.lower() == "nghỉ học")
             self.lbl_stats.setText(f"Tổng số: {len(students)} sinh viên (đang học: {dang_hoc} | tạm nghỉ: {tam_nghi} | nghỉ học: {nghi_hoc})")
+            self.is_data_loaded = True
         except Exception as e:
-            print(f"\n[LỖI TẢI DỮ LIỆU]: {e}\n")
+            logging.error(f"[LỖI TẢI DỮ LIỆU]: {e}")
             QMessageBox.warning(self, "Lỗi tải dữ liệu", f"Không thể tải dữ liệu từ Excel:\n{e}")
 
     def filter_table(self) -> None:

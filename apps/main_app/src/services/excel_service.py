@@ -1,5 +1,6 @@
 import os
 import openpyxl
+import logging
 from typing import List, Dict, Any
 
 
@@ -37,7 +38,7 @@ class ExcelService:
                 if i == 0:
                     # Dòng đầu tiên là Header, ép về string
                     headers = [str(cell).strip() if cell is not None else f"Column_{j}" for j, cell in enumerate(row)]
-                    print(f"📋 [DEBUG] Các cột Excel tìm thấy: {headers}")
+                    logging.info(f"📋 Các cột Excel tìm thấy: {headers}")
                 else:
                     # Bỏ qua các dòng trống hoàn toàn
                     if all(cell is None or str(cell).strip() == "" for cell in row):

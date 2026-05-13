@@ -29,6 +29,10 @@ def test_parse_accounting_file(mock_load_excel) -> None:
 
 
 def test_extract_class_code() -> None:
+    """
+    EN: Test extracting class code from a string using Regex.
+    VI: Kiểm thử việc trích xuất mã lớp từ chuỗi sử dụng Regex.
+    """
     text = "Tiếng Anh Level 1 - Tối 2-4-6 (18:00 - 20:00) - Cơ sở Q9 [Mã: LNH0526NEA]"
     assert RegistrationService.extract_class_code(text) == "LNH0526NEA"
     
@@ -37,11 +41,15 @@ def test_extract_class_code() -> None:
 
 @patch("apps.main_app.src.services.excel_service.ExcelService.load_excel_data")
 def test_count_registrations_from_file(mock_load_excel) -> None:
+    """
+    EN: Test counting registrations from an Excel file data map.
+    VI: Kiểm thử việc đếm số lượng đăng ký từ dữ liệu file Excel.
+    """
     mock_load_excel.return_value = [
-        {"Bạn muốn đăng ký học lớp nào": "Tiếng Anh Level 2 - Tối [Mã: LNH0526NDB]"},
-        {"Bạn muốn đăng ký học lớp nào": "Tiếng Anh Level 1 - Tối [Mã: LNH0526NEA]"},
+        {"Cột bất kỳ": "Tiếng Anh Level 2 - Tối [Mã: LNH0526NDB]"},
+        {"Chọn lớp": "Tiếng Anh Level 1 - Tối [Mã: LNH0526NEA]"},
         {"Lớp đăng ký": "Tiếng Anh Level 1 - Tối [Mã: LNH0526NEA]"},
-        {"Bạn muốn đăng ký học lớp nào": "Không có mã"}
+        {"Cột khác": "Không có mã"}
     ]
     
     counts = RegistrationService.count_registrations_from_file("dummy.xlsx")

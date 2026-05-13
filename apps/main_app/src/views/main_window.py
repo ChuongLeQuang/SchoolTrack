@@ -1,6 +1,8 @@
 from PyQt6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QStackedWidget
 from PyQt6.QtCore import Qt, QSettings
-from PyQt6.QtGui import QCloseEvent
+from PyQt6.QtGui import QCloseEvent, QPixmap
+import os
+import sys
 from apps.main_app.src.views.student_view import StudentView
 from apps.main_app.src.views.class_view import ClassView
 
@@ -24,6 +26,7 @@ class MainWindow(QMainWindow):
             self.resize(1024, 768)
             
         self._setup_ui()
+        self.content_stack.currentChanged.connect(self.on_screen_changed)
 
     def _setup_ui(self) -> None:
         """
@@ -98,6 +101,22 @@ class MainWindow(QMainWindow):
                 sidebar_layout.addWidget(self.sub_menu_classes)
 
         sidebar_layout.addStretch()  # Push everything up
+        
+        # Thêm logo bản quyền ở dưới cùng Sidebar
+        lbl_logo = QLabel()
+        if getattr(sys, 'frozen', False):
+            project_root = sys._MEIPASS
+        else:
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+
+        logo_path = os.path.join(project_root, "assets", "2CJ1_3D.png")
+        if os.path.exists(logo_path):
+            pixmap = QPixmap(logo_path)
+            lbl_logo.setPixmap(pixmap.scaledToWidth(120, Qt.TransformationMode.SmoothTransformation))
+            lbl_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl_logo.setToolTip("Copyright (c) 2026 Le Quang Chuong")
+        sidebar_layout.addWidget(lbl_logo)
+
         sidebar.setLayout(sidebar_layout)
 
         # 2. Main Content Setup
@@ -155,6 +174,18 @@ class MainWindow(QMainWindow):
         self.btn_sub_plan.clicked.connect(lambda: [self.content_stack.setCurrentIndex(2), self.class_view.set_active_screen(0)])
         self.btn_sub_sync.clicked.connect(lambda: [self.content_stack.setCurrentIndex(2), self.class_view.set_active_screen(1)])
         self.btn_sub_final.clicked.connect(lambda: [self.content_stack.setCurrentIndex(2), self.class_view.set_active_screen(2)])
+
+    def on_screen_changed(self, index: int) -> None:
+        """
+        EN: Load data for a view only when it becomes active for the first time.
+        VI: Chỉ tải dữ liệu cho một màn hình khi nó được kích hoạt lần đầu tiên.
+        """
+        if index == 1: # Student View
+            if not self.student_view.is_data_loaded:
+                self.student_view.load_data()
+        elif index == 2: # Class View
+            if not self.class_view.is_data_loaded:
+                self.class_view.load_data()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """

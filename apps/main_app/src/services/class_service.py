@@ -1,7 +1,12 @@
 import os
 import sys
-from typing import List, Dict
+import json
+import time
+import logging
+from typing import List, Dict, Any
+import re
 from datetime import datetime
+import requests
 from apps.main_app.src.models.entities import ClassInfo
 from apps.main_app.src.services.excel_service import ExcelService
 
@@ -52,12 +57,48 @@ class ClassService:
         return years
 
     @staticmethod
-    def get_classes_from_excel(file_path: str) -> List[ClassInfo]:
+    def get_waves_for_year(year: str) -> List[str]:
+        """Lấy danh sách các Đợt từ cấu hình JSON form_links.json."""
+        file_path = ClassService.get_form_links_file()
+        if not os.path.exists(file_path):
+            return []
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            year_data = data.get(year, {})
+            if isinstance(year_data, dict):
+                return list(year_data.keys())
+        except Exception:
+            return []
+
+    @staticmethod
+    def get_class_codes_for_wave(year: str, wave: str) -> List[str]:
         """
-        EN: Read excel file and convert it into a list of ClassInfo objects.
-        VI: Đọc file excel và chuyển thành danh sách đối tượng ClassInfo.
+        EN: Get the list of class codes associated with a specific wave from the metadata JSON.
+        VI: Lấy danh sách mã lớp thuộc về một đợt cụ thể từ file JSON siêu dữ liệu.
         """
-        raw_data = ExcelService.load_excel_data(file_path)
+        file_path = ClassService.get_form_links_file()
+        if not os.path.exists(file_path):
+            return []
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            year_data = data.get(year, {})
+            wave_data = year_data.get(wave, {})
+            
+            if isinstance(wave_data, dict):
+                return wave_data.get("classes", [])
+            return []
+        except Exception:
+            return []
+
+    @staticmethod
+    def _parse_class_rows(raw_data: List[Dict[str, Any]]) -> List[ClassInfo]:
+        """
+        EN: Helper to parse raw dictionary data into a list of ClassInfo objects.
+        VI: Hàm phụ trợ để chuyển đổi dữ liệu thô (dictionary) thành danh sách đối tượng ClassInfo.
+        """
         classes = []
 
         def get_val(row_dict: dict, keys: list) -> str:
@@ -118,6 +159,37 @@ class ClassService:
         return classes
 
     @staticmethod
+    def get_classes_from_excel(file_path: str, wave_name: str | None) -> List[ClassInfo]:
+        """
+        EN: Read excel file and convert it into a list of ClassInfo objects.
+            If wave_name is None, read from all sheets.
+        VI: Đọc file excel và chuyển thành danh sách đối tượng ClassInfo.
+            Nếu wave_name là None, đọc từ tất cả các sheet.
+        """
+        if wave_name is not None:
+            # Đọc từ một sheet cụ thể
+            raw_data = ExcelService.load_excel_data(file_path, sheet_name=wave_name)
+            return ClassService._parse_class_rows(raw_data)
+        else:
+            # Đọc từ tất cả các sheet trong file
+            import openpyxl
+            all_classes = []
+            try:
+                wb = openpyxl.load_workbook(file_path, read_only=True)
+                sheet_names = wb.sheetnames
+                wb.close()
+                
+                for sheet in sheet_names:
+                    # Bỏ qua các sheet hệ thống hoặc sheet ẩn của Excel
+                    if sheet.startswith("_") or "filter" in sheet.lower():
+                        continue
+                    raw_data = ExcelService.load_excel_data(file_path, sheet_name=sheet)
+                    all_classes.extend(ClassService._parse_class_rows(raw_data))
+                return all_classes
+            except Exception as e:
+                raise ValueError(f"Lỗi khi đọc nhiều sheet từ file {file_path}: {e}")
+
+    @staticmethod
     def create_academic_year_file(file_path: str) -> bool:
         """
         EN: Create a new Excel file for a new academic year with default headers.
@@ -130,7 +202,7 @@ class ClassService:
             
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = "Danh Sach Lop"
+        ws.title = "Đợt 1"
         
         headers = [
             "STT", "Mã Lớp", "Niên Khóa", "Tên Lớp", "Địa điểm", "Phòng học", "Buổi học", "Lịch học", "Giờ học", 
@@ -141,13 +213,132 @@ class ClassService:
         
         wb.save(file_path)
         wb.close()
+        
+        # Khởi tạo siêu dữ liệu (Metadata) cho Đợt 1 vào form_links.json
+        year = os.path.basename(file_path).replace("Quan Ly Lop Hoc ", "").replace(".xlsx", "")
+        ClassService.save_wave_links(year, "Đợt 1", "", "")
         return True
 
     @staticmethod
-    def save_class_to_excel(file_path: str, class_info: ClassInfo) -> None:
+    def create_wave_in_year(year: str, wave_name: str) -> bool:
+        """Tạo một Đợt mới (Sheet mới) trong file Niên khóa."""
+        file_path = ClassService.get_file_path_for_year(year)
+        if not os.path.exists(file_path):
+            return False
+        import openpyxl
+        wb = openpyxl.load_workbook(file_path)
+        if wave_name in wb.sheetnames:
+            wb.close()
+            return False
+        ws = wb.create_sheet(wave_name)
+        headers = ["STT", "Mã Lớp", "Niên Khóa", "Tên Lớp", "Địa điểm", "Phòng học", "Buổi học", "Lịch học", "Giờ học", "Thời gian khai giảng", "Ngày kết thúc khóa", "SL Min", "SL Max", "SL Hiện tại", "Trạng thái"]
+        ws.append(headers)
+        wb.save(file_path)
+        wb.close()
+        
+        # Cập nhật siêu dữ liệu (Metadata) vào form_links.json
+        ClassService.save_wave_links(year, wave_name, "", "")
+        return True
+
+    @staticmethod
+    def rename_wave(year: str, old_wave_name: str, new_wave_name: str) -> bool:
+        """
+        EN: Rename a wave (sheet) and update the corresponding link configuration in JSON.
+        VI: Đổi tên một Đợt (Sheet) và cập nhật file JSON cấu hình link tương ứng.
+        """
+        file_path = ClassService.get_file_path_for_year(year)
+        if not os.path.exists(file_path):
+            return False
+        
+        import openpyxl
+        wb = openpyxl.load_workbook(file_path)
+        if old_wave_name not in wb.sheetnames or new_wave_name in wb.sheetnames:
+            wb.close()
+            return False
+            
+        ws = wb[old_wave_name]
+        ws.title = new_wave_name
+        wb.save(file_path)
+        wb.close()
+        
+        # Cập nhật file form_links.json
+        links_file = ClassService.get_form_links_file()
+        if os.path.exists(links_file):
+            try:
+                with open(links_file, "r+", encoding="utf-8") as f:
+                    data = json.load(f)
+                    changed = False
+                    
+                    # Migrate cấu trúc cũ (nếu có)
+                    old_flat_key = f"{year}_{old_wave_name}"
+                    if old_flat_key in data:
+                        if year not in data or not isinstance(data[year], dict): data[year] = {}
+                        data[year][new_wave_name] = data.pop(old_flat_key)
+                        changed = True
+                        
+                    # Cấu trúc mới
+                    if year in data and isinstance(data[year], dict) and old_wave_name in data[year]:
+                        data[year][new_wave_name] = data[year].pop(old_wave_name)
+                        changed = True
+                        
+                    if changed:
+                        f.seek(0)
+                        f.truncate()
+                        json.dump(data, f, indent=4, ensure_ascii=False)
+            except Exception:
+                pass # Bỏ qua nếu file JSON lỗi
+        return True
+
+    @staticmethod
+    def delete_wave(year: str, wave_name: str) -> bool:
+        """
+        EN: Delete a wave (sheet) and update the corresponding link configuration in JSON.
+        VI: Xóa một Đợt (Sheet) và cập nhật file JSON cấu hình link tương ứng.
+        """
+        file_path = ClassService.get_file_path_for_year(year)
+        if not os.path.exists(file_path): return False
+            
+        import openpyxl
+        wb = openpyxl.load_workbook(file_path)
+        if wave_name not in wb.sheetnames or len(wb.sheetnames) <= 1:
+            wb.close()
+            return False
+            
+        wb.remove(wb[wave_name])
+        wb.save(file_path)
+        wb.close()
+        
+        # Cập nhật file form_links.json
+        links_file = ClassService.get_form_links_file()
+        if os.path.exists(links_file):
+            try:
+                with open(links_file, "r+", encoding="utf-8") as f:
+                    data = json.load(f)
+                    changed = False
+                    
+                    old_flat_key = f"{year}_{wave_name}"
+                    if old_flat_key in data:
+                        data.pop(old_flat_key)
+                        changed = True
+                        
+                    if year in data and isinstance(data[year], dict) and wave_name in data[year]:
+                        data[year].pop(wave_name)
+                        if not data[year]: data.pop(year)
+                        changed = True
+                        
+                    if changed:
+                        f.seek(0)
+                        f.truncate()
+                        json.dump(data, f, indent=4, ensure_ascii=False)
+            except Exception:
+                pass
+        return True
+
+    @staticmethod
+    def save_class_to_excel(file_path: str, wave_name: str, class_info: ClassInfo) -> None:
         """
         EN: Save a ClassInfo object to the Excel file (Sheet 1).
-        VI: Lưu đối tượng ClassInfo xuống file Excel (Sheet 1).
+        VI: Lưu đối tượng ClassInfo xuống file Excel theo Đợt.
         """
         end_date_str = class_info.end_date.strftime("%d/%m/%Y") if class_info.end_date else ""
 
@@ -174,34 +365,203 @@ class ClassService:
             match_cols=["Mã Lớp"],
             match_value=class_info.class_code,
             row_data_map=row_data_map,
-            sheet_name="Danh Sach Lop"
+            sheet_name=wave_name
         )
+        
+        # Tự động đồng bộ mã lớp vào Metadata JSON
+        ClassService.update_class_in_wave_metadata(class_info.year_code, wave_name, class_info.class_code, "add")
 
     @staticmethod
     def update_registration_counts(file_path: str, counts: Dict[str, int]) -> None:
         """
-        EN: Update 'SL Hiện tại' for multiple classes based on registration counts.
-        VI: Cập nhật 'SL Hiện tại' cho nhiều lớp dựa trên số lượng đăng ký.
+        EN: Update 'SL Hiện tại' for multiple classes based on registration counts across all sheets.
+        VI: Cập nhật 'SL Hiện tại' cho nhiều lớp dựa trên số lượng đăng ký trên tất cả các sheet.
         """
-        for code, count in counts.items():
-            row_data_map = [(["SL Hiện tại", "SL Now", "Đăng Ký"], count)]
-            ExcelService.save_row(
-                file_path=file_path,
-                match_cols=["Mã Lớp"],
-                match_value=code,
-                row_data_map=row_data_map,
-                sheet_name="Danh Sach Lop"
-            )
+        import openpyxl
+        if not os.path.exists(file_path):
+            return
+
+        wb = openpyxl.load_workbook(file_path)
+        updated = False
+        
+        for sheet in wb.worksheets:
+            if sheet.title.startswith("_") or "filter" in sheet.title.lower():
+                continue
+                
+            headers = [str(sheet.cell(row=1, column=c).value).strip().lower() if sheet.cell(row=1, column=c).value else "" for c in range(1, sheet.max_column + 1)]
+            
+            code_col_idx = -1
+            for i, h in enumerate(headers):
+                if h in ["mã lớp", "class code", "mã"]:
+                    code_col_idx = i + 1
+                    break
+            if code_col_idx == -1: continue
+                
+            count_col_idx = -1
+            for i, h in enumerate(headers):
+                if h in ["sl hiện tại", "sl now", "đăng ký"]:
+                    count_col_idx = i + 1
+                    break
+            if count_col_idx == -1:
+                count_col_idx = sheet.max_column + 1
+                sheet.cell(row=1, column=count_col_idx, value="SL Hiện tại")
+            
+            for row_num in range(2, sheet.max_row + 1):
+                cell_val = sheet.cell(row=row_num, column=code_col_idx).value
+                if cell_val is not None:
+                    code_val = str(cell_val).strip()
+                    if code_val in counts:
+                        sheet.cell(row=row_num, column=count_col_idx, value=counts[code_val])
+                        updated = True
+                        
+        if updated:
+            wb.save(file_path)
+        wb.close()
 
     @staticmethod
-    def delete_class_from_excel(file_path: str, class_code: str) -> bool:
+    def delete_class_from_excel(file_path: str, year: str, wave_name: str, class_code: str) -> bool:
         """
         EN: Delete a class from the Excel file by class_code.
         VI: Xóa lớp học khỏi file Excel dựa trên Mã Lớp.
         """
-        return ExcelService.delete_row(
+        is_deleted = ExcelService.delete_row(
             file_path=file_path,
             match_cols=["Mã Lớp"],
             match_value=class_code,
-            sheet_name="Danh Sach Lop"
+            sheet_name=wave_name
         )
+        if is_deleted:
+            ClassService.update_class_in_wave_metadata(year, wave_name, class_code, "remove")
+        return is_deleted
+
+    @staticmethod
+    def get_form_links_file() -> str:
+        """Lấy đường dẫn file cấu hình lưu trữ link Google Form."""
+        return os.path.join(ClassService.get_data_dir(), "form_links.json")
+
+    @staticmethod
+    def get_wave_links(year: str, wave: str) -> dict:
+        """
+        EN: Get the saved Google Form & Sheet links for a specific year/wave.
+        VI: Lấy cặp link Google Form & Sheet đã lưu cho niên khóa/đợt cụ thể.
+        """
+        file_path = ClassService.get_form_links_file()
+        default_links = {"form_link": "", "sheet_link": ""}
+        if not os.path.exists(file_path):
+            return default_links
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            year_data = data.get(year, {})
+            wave_data = year_data.get(wave, {})
+            
+            # Hỗ trợ tương thích ngược chuẩn phẳng cũ
+            old_key = f"{year}_{wave}"
+            if old_key in data: wave_data = data[old_key]
+                
+            if isinstance(wave_data, str): return {"form_link": wave_data, "sheet_link": ""}
+            elif isinstance(wave_data, dict): return {"form_link": wave_data.get("form_link", ""), "sheet_link": wave_data.get("sheet_link", "")}
+            return default_links
+        except Exception:
+            return default_links
+
+    @staticmethod
+    def save_wave_links(year: str, wave: str, form_link: str, sheet_link: str) -> None:
+        """
+        EN: Save the Google Form & Sheet links mapped to a specific wave.
+        """
+        file_path = ClassService.get_form_links_file()
+        data = {}
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, "r", encoding="utf-8") as f: data = json.load(f)
+            except Exception: pass
+            
+        if year not in data or not isinstance(data[year], dict): data[year] = {}
+        if wave not in data[year]: data[year][wave] = {"form_link": "", "sheet_link": "", "classes": []}
+            
+        data[year][wave]["form_link"] = form_link
+        data[year][wave]["sheet_link"] = sheet_link
+        
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+
+    @staticmethod
+    def update_class_in_wave_metadata(year: str, wave: str, class_code: str, action: str) -> None:
+        """
+        EN: Add or remove a class_code from the wave metadata JSON.
+        VI: Thêm hoặc xóa mã lớp khỏi cấu hình JSON của Đợt.
+        """
+        file_path = ClassService.get_form_links_file()
+        data = {}
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, "r", encoding="utf-8") as f: data = json.load(f)
+            except Exception: pass
+            
+        if year not in data or not isinstance(data[year], dict): data[year] = {}
+        if wave not in data[year]: data[year][wave] = {"form_link": "", "sheet_link": "", "classes": []}
+        if "classes" not in data[year][wave]: data[year][wave]["classes"] = []
+        
+        classes = data[year][wave]["classes"]
+        if action == "add" and class_code not in classes: classes.append(class_code)
+        elif action == "remove" and class_code in classes: classes.remove(class_code)
+            
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+
+    @staticmethod
+    def download_google_sheet_as_excel(sheet_url: str, save_path: str) -> bool:
+        """
+        EN: Downloads a Google Sheet as an .xlsx file.
+        VI: Tải một Google Sheet về dưới dạng file .xlsx.
+        """
+        if not sheet_url:
+            return False
+
+        # Extract Sheet ID
+        id_match = re.search(r"spreadsheets/d/([a-zA-Z0-9-_]+)", sheet_url)
+        if not id_match:
+            return False
+        sheet_id = id_match.group(1)
+
+        # Extract GID (optional, defaults to first sheet if not found)
+        gid_match = re.search(r"gid=([0-9]+)", sheet_url)
+        gid = gid_match.group(1) if gid_match else "0"
+
+        export_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=xlsx&gid={gid}"
+        
+        # Thêm resourcekey nếu có trong link gốc (Google Form thường sinh ra tham số này)
+        resourcekey_match = re.search(r"resourcekey=([a-zA-Z0-9-_]+)", sheet_url)
+        if resourcekey_match:
+            export_url += f"&resourcekey={resourcekey_match.group(1)}"
+
+        try:
+            # Cơ chế Retry (Rule 1)
+            retries = 3
+            for attempt in range(retries):
+                try:
+                    response = requests.get(export_url, stream=True, timeout=30)
+                    response.raise_for_status()
+                    
+                    content_type = response.headers.get('Content-Type', '')
+                    if 'text/html' in content_type:
+                        logging.error(f"[LỖI TẢI FILE]: File Google Sheet bị khóa Private. Content-Type: {content_type}")
+                        return False
+                        
+                    with open(save_path, "wb") as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                    return True
+                except requests.exceptions.RequestException as e:
+                    logging.warning(f"Lỗi mạng tải file. Thử lại {attempt + 1}/{retries}... Chi tiết: {e}")
+                    if attempt < retries - 1:
+                        time.sleep(2)
+                    else:
+                        logging.error(f"[LỖI TẢI FILE]: Request thất bại sau {retries} lần thử: {e}")
+                        return False
+            return False
+        except Exception as e:
+            logging.error(f"[LỖI KHÔNG XÁC ĐỊNH]: {e}")
+            return False

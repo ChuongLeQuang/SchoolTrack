@@ -27,9 +27,9 @@ def test_class_dialog_auto_generate_code(mock_get_time_slots, mock_get_schedules
         "NE": {"name": "Level 1", "min": 15, "max": 30, "session": "Tối", "schedule": "2-4-6", "time_slot": "18:00 - 20:00", "location": "Cơ sở Q9"}
     }
     mock_get_locations.return_value = ["Cơ sở Q9"]
-    mock_get_sessions.return_value = ["Tối"]
+    mock_get_sessions.return_value = ["Sáng", "Tối"]
     mock_get_schedules.return_value = ["2-4-6"]
-    mock_get_time_slots.return_value = ["18:00 - 20:00"]
+    mock_get_time_slots.return_value = ["08:00 - 10:00", "18:00 - 20:00"]
     
     # Giả lập trên bảng đã có sẵn lớp A và B của tháng 08/2025
     existing_codes = ["LNH0825NEA", "LNH0825NEB"]
