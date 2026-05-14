@@ -45,7 +45,7 @@ Tài liệu này định nghĩa chi tiết về cấu trúc dữ liệu, luồng
   - Liên kết: **MSV** ↔ **Mã Lớp**.
   - **Trạng thái đăng ký**: 
     - `Nguyện vọng` → mới nộp form, chưa đóng tiền.
-    - `Lệch khớp` → đóng tiền nhưng sai MSV/Mã lớp.
+    - `Lệch khớp` → đóng tiền nhưng sai MSV/Mã lớp, hoặc có nộp form nhưng không thấy chuyển khoản.
     - `Hợp lệ` → khớp MSV, Mã lớp và đã đóng học phí.
     - `Đã phân bổ lớp` → đã được phân bổ vào lớp (khi lớp thực sự mở).
 
@@ -56,6 +56,7 @@ Tài liệu này định nghĩa chi tiết về cấu trúc dữ liệu, luồng
 - **Quy tắc nghiệp vụ**:
   - **Chuẩn hóa Tên Đợt**: Tên Đợt được tự động chuẩn hóa (loại bỏ khoảng trắng thừa, kiểm tra trùng lặp không phân biệt hoa/thường) để đảm bảo tính toàn vẹn dữ liệu trên Excel.
   - **Chế độ "Tất cả"**: Chế độ xem tổng hợp toàn bộ các lớp của một niên khóa. Khi kích hoạt, toàn bộ chức năng thao tác dữ liệu (Thêm, Sửa, Xóa, Cập nhật...) bị khóa tạm thời để bảo vệ an toàn cho file gốc.
+  - **Tự động hóa Google Form**: Tích hợp API qua Google Apps Script (GAS). Cho phép 1-click tự động nhân bản Form mẫu, chèn danh sách lớp, tạo Sheet liên kết và cấp quyền truy cập (Áp dụng linh hoạt cho cả tài khoản Google Cá nhân & Doanh nghiệp).
 
 ---
 
@@ -74,8 +75,8 @@ Tài liệu này định nghĩa chi tiết về cấu trúc dữ liệu, luồng
 - [x] Thiết kế Menu điều hướng (Sidebar)
 - [x] Tích hợp Cửa sổ Hướng dẫn sử dụng (truy cập từ Sidebar).
 - [x] Màn hình Quản lý Sinh viên (Hiển thị Data Table, Bộ lọc trạng thái, CRUD)
-- [x] Màn hình Quản lý Lớp học: Tab 1 - Kế hoạch Dự kiến (Tự sinh mã lớp, Cập nhật SL từ Google Form)
-- [ ] Màn hình Quản lý Lớp học: Tab 2 - Đối chiếu Kế toán (Gộp danh sách đóng tiền)
+- [x] Màn hình Quản lý Lớp học: Tab 1 - Kế hoạch Dự kiến (Tự sinh mã lớp, API tạo Form tự động, Cập nhật SL thông minh chống nhiễu & Reset rổ)
+- [x] Màn hình Quản lý Lớp học: Tab 2 - Đối chiếu Kế toán (Quét Regex lấy MSV/Mã lớp từ lịch sử giao dịch, đối chiếu Hợp lệ/Lệch khớp/Chưa đóng tiền)
 - [ ] Màn hình Quản lý Lớp học: Tab 3 - Chốt Lớp & Phân bổ (Mở/Hủy lớp)
 
 ### Bước 3: Mở rộng sau này
@@ -100,6 +101,7 @@ SchoolTrack/
 │       │   ├── config/             # Chứa các file cấu hình tĩnh (class_templates.json)
 │       │   ├── models/             # Định nghĩa các đối tượng dữ liệu (entities)
 │       │   ├── services/           # Xử lý logic nghiệp vụ, tương tác với dữ liệu
+│       │   ├── utils/              # Chứa các hàm tiện ích dùng chung (VD: text_utils.py xử lý tiếng Việt)
 │       │   └── views/              # Chứa các file giao diện người dùng (PyQt6 UI)
 │       └── tests/                  # Các bài kiểm thử đơn vị (Unit Tests)
 │           ├── services/           # Unit Tests cho các Service

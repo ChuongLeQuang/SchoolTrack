@@ -44,14 +44,28 @@ class StudentService:
         raw_data = ExcelService.load_excel_data(file_path)
         students = []
 
+        def get_val(row_dict: dict, keys: list) -> Any:
+            for k, v in row_dict.items():
+                if not k: continue
+                k_lower = str(k).lower()
+                for key in keys:
+                    if key.lower() in k_lower:
+                        return v
+            return None
+
         for row in raw_data:
             # Tìm MSV linh hoạt hơn với các biến thể tên cột
-            student_id = row.get("Mã Sinh viên") or row.get("Mã SV") or row.get("MSV") or row.get("Mã Sinh Viên")
+            student_id = get_val(row, ["mã sinh viên", "mã sv", "msv"])
+            if student_id:
+                student_id = str(student_id).strip()
+                if student_id.endswith(".0"):
+                    student_id = student_id[:-2]
+                    
             if not student_id:
                 continue
 
             # Xử lý parse ngày sinh (hỗ trợ định dạng ISO hoặc DD/MM/YYYY)
-            dob_str = row.get("Ngày sinh") or row.get("DOB") or row.get("Ngày Sinh")
+            dob_str = get_val(row, ["ngày sinh", "dob"])
             dob = None
             if dob_str:
                 dob_str_clean = str(dob_str).strip().split()[0]  # Lấy phần ngày, bỏ phần giờ nếu có
@@ -65,27 +79,33 @@ class StudentService:
 
             # Xử lý số dư học phí (loại bỏ dấu phẩy/chấm nếu có)
             try:
-                balance_str = row.get("Số dư học phí") or row.get("Số dư") or row.get("Học phí") or "0"
+                balance_str = get_val(row, ["số dư học phí", "số dư", "học phí"]) or "0"
                 balance_raw = str(balance_str).replace(",", "").replace(".", "").strip()
                 tuition_balance = int(balance_raw)
             except ValueError:
                 tuition_balance = 0
 
             # Xử lý Họ và Tên (Hỗ trợ file có 1 cột gộp hoặc 2 cột tách rời)
-            full_name = row.get("Họ và tên") or row.get("Họ Tên") or row.get("Họ tên")
+            full_name = get_val(row, ["họ & tên", "họ tên", "họ và tên"])
             if not full_name:
-                ho = str(row.get("Họ") or row.get("Họ lót") or "").strip()
-                ten = str(row.get("Tên") or "").strip()
+                ho = str(get_val(row, ["họ lót", "họ đệm", "họ"]) or "").strip()
+                ten = str(get_val(row, ["tên"]) or "").strip()
                 full_name = f"{ho} {ten}".strip()
+
+            # Xử lý Số điện thoại (Excel thường ép kiểu số và mất số 0 ở đầu)
+            phone_val = str(get_val(row, ["số điện thoại", "sđt", "điện thoại", "phone"]) or "").strip()
+            if phone_val.endswith(".0"): phone_val = phone_val[:-2]
+            if phone_val and not phone_val.startswith("0") and phone_val.isdigit():
+                phone_val = "0" + phone_val
 
             # Tạo đối tượng Student
             student = Student(
                 student_id=str(student_id).strip(),
                 full_name=full_name,
                 date_of_birth=dob,
-                email=str(row.get("Email") or "").strip(),
-                phone_number=str(row.get("Số điện thoại") or row.get("SĐT") or row.get("Điện thoại") or "").strip(),
-                study_status=str(row.get("Trạng thái học tập") or row.get("Trạng thái") or "Đang học").strip(),
+                email=str(get_val(row, ["email"]) or "").strip(),
+                phone_number=phone_val,
+                study_status=str(get_val(row, ["trạng thái học tập", "trạng thái"]) or "Đang học").strip(),
                 tuition_balance=tuition_balance
             )
             students.append(student)

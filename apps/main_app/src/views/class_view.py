@@ -2,17 +2,62 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                              QLineEdit, QPushButton, QTableWidget, 
                              QLabel, QHeaderView, QTableWidgetItem, QMessageBox,
                              QComboBox, QInputDialog, QStackedWidget, QApplication, 
-                             QFileDialog, QGroupBox)
+                             QFileDialog, QGroupBox, QDialog, QFormLayout, 
+                             QDialogButtonBox)
 from PyQt6.QtCore import Qt, QTimer, QSettings
 from PyQt6.QtGui import QColor, QPixmap
 import os
 import sys
 import webbrowser
 from datetime import datetime
+import re
 from apps.main_app.src.services.class_service import ClassService
 from apps.main_app.src.models.entities import ClassInfo
 from apps.main_app.src.views.class_dialog import ClassDialog
 from apps.main_app.src.services.registration_service import RegistrationService
+
+
+class GASConfigDialog(QDialog):
+    """Hộp thoại cấu hình thông số kết nối Google Apps Script."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Cấu hình API Google Form tự động")
+        self.setMinimumWidth(550)
+        self.settings = QSettings("SchoolTrackOrg", "SchoolTrack")
+        
+        layout = QFormLayout(self)
+        
+        self.txt_url = QLineEdit()
+        self.txt_url.setPlaceholderText("https://script.google.com/macros/s/.../exec")
+        self.txt_url.setText(self.settings.value("gas/web_app_url", ""))
+        
+        self.txt_template = QLineEdit()
+        self.txt_template.setPlaceholderText("ID của file Google Form mẫu (Ví dụ: 1BxiMVs...)")
+        self.txt_template.setText(self.settings.value("gas/template_id", ""))
+        
+        self.txt_secret = QLineEdit()
+        self.txt_secret.setPlaceholderText("Mật khẩu bảo mật (Ví dụ: mat_khau_123)")
+        self.txt_secret.setText(self.settings.value("gas/secret", "schooltrack_secret_123"))
+        
+        layout.addRow("Web App URL:", self.txt_url)
+        layout.addRow("Form Mẫu ID:", self.txt_template)
+        layout.addRow("Secret Token:", self.txt_secret)
+        
+        lbl_hint = QLabel("💡 Lưu ý: Bạn phải thiết lập Web App trên Google Drive và dán URL vào đây trước khi sử dụng.")
+        lbl_hint.setWordWrap(True)
+        lbl_hint.setStyleSheet("color: #6B7280; font-style: italic; margin-top: 10px;")
+        layout.addRow(lbl_hint)
+        
+        self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        layout.addRow(self.buttons)
+        
+    def accept(self):
+        self.settings.setValue("gas/web_app_url", self.txt_url.text().strip())
+        self.settings.setValue("gas/template_id", self.txt_template.text().strip())
+        self.settings.setValue("gas/secret", self.txt_secret.text().strip())
+        super().accept()
 
 
 class ClassView(QWidget):
@@ -132,6 +177,12 @@ class ClassView(QWidget):
         self.btn_copy_form.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_copy_form.clicked.connect(self.copy_for_google_form)
 
+        self.btn_auto_form = QPushButton("🪄 Tự động tạo Form")
+        self.btn_auto_form.setToolTip("Tự động copy Form Mẫu và chèn danh sách lớp đã chọn (Yêu cầu API)")
+        self.btn_auto_form.setStyleSheet("padding: 6px 15px; font-weight: bold; font-size: 14px; background-color: #F59E0B; color: white; border: none; border-radius: 5px;")
+        self.btn_auto_form.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_auto_form.clicked.connect(self.auto_create_form)
+
         self.cb_import_mode = QComboBox()
         self.cb_import_mode.addItems([
             "1. Lọc cứng (Bỏ qua MSV sai)",
@@ -176,6 +227,7 @@ class ClassView(QWidget):
         toolbar_layout.addWidget(self.search_input)
         toolbar_layout.addStretch()
         toolbar_layout.addWidget(self.btn_copy_form)
+        toolbar_layout.addWidget(self.btn_auto_form)
         toolbar_layout.addWidget(self.cb_import_mode)
         toolbar_layout.addWidget(self.btn_import_google_form)
         toolbar_layout.addWidget(self.btn_add)
@@ -238,9 +290,18 @@ class ClassView(QWidget):
         row2.addWidget(self.btn_open_sheet)
         row2.addWidget(self.btn_download_sheet)
         row2.addWidget(self.btn_save_links)
+
+        row3 = QHBoxLayout()
+        self.btn_gas_config = QPushButton("⚙️ Cấu hình API Google Form")
+        self.btn_gas_config.setStyleSheet("padding: 4px 10px; font-weight: bold; color: #4B5563; border: 1px solid #D1D5DB; border-radius: 4px; font-size: 12px;")
+        self.btn_gas_config.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_gas_config.clicked.connect(self.open_gas_config_dialog)
+        row3.addStretch()
+        row3.addWidget(self.btn_gas_config)
         
         links_config_layout.addLayout(row1)
         links_config_layout.addLayout(row2)
+        links_config_layout.addLayout(row3)
         links_group.setLayout(links_config_layout)
         layout.addWidget(links_group)
 
@@ -405,6 +466,7 @@ class ClassView(QWidget):
         self.txt_form_link.setEnabled(not is_all_waves)
         self.txt_sheet_link.setEnabled(not is_all_waves)
         self.btn_save_links.setEnabled(not is_all_waves)
+        self.btn_auto_form.setEnabled(not is_all_waves)
         
         # Khóa các nút thao tác trực tiếp với dữ liệu khi đang xem "Tất cả"
         self.btn_add.setEnabled(not is_all_waves)
@@ -609,22 +671,32 @@ class ClassView(QWidget):
     def open_form_link(self) -> None:
         """Mở link Google Form bằng trình duyệt mặc định."""
         link = self.txt_form_link.text().strip()
-        if link:
-            if not link.startswith("http://") and not link.startswith("https://"):
-                link = "https://" + link
-            webbrowser.open(link)
-        else:
+        if not link:
             QMessageBox.warning(self, "Cảnh báo", "Vui lòng nhập link Google Form trước khi mở!")
+            return
+            
+        if "script.google.com" in link:
+            QMessageBox.warning(self, "Nhầm lẫn Link", "Đây là link API của Google Script (Nhân viên ảo), không phải link Google Form!\n\nVui lòng dán link này vào phần '⚙️ Cấu hình API' và nhấn nút '🪄 Tự động tạo Form'.")
+            return
+
+        if not link.startswith("http://") and not link.startswith("https://"):
+            link = "https://" + link
+        webbrowser.open(link)
 
     def open_sheet_link(self) -> None:
         """Mở link Google Sheet bằng trình duyệt mặc định."""
         link = self.txt_sheet_link.text().strip()
-        if link:
-            if not link.startswith("http://") and not link.startswith("https://"):
-                link = "https://" + link
-            webbrowser.open(link)
-        else:
+        if not link:
             QMessageBox.warning(self, "Cảnh báo", "Vui lòng nhập link Google Sheet trước khi mở!")
+            return
+            
+        if "script.google.com" in link:
+            QMessageBox.warning(self, "Nhầm lẫn Link", "Đây là link API của Google Script, không phải link Google Sheet!\n\nVui lòng nhấn nút '🪄 Tự động tạo Form' để phần mềm tự sinh ra link Sheet chuẩn xác.")
+            return
+
+        if not link.startswith("http://") and not link.startswith("https://"):
+            link = "https://" + link
+        webbrowser.open(link)
 
     def download_sheet_file(self) -> None:
         """Tải file Google Sheet về máy dưới dạng file Excel."""
@@ -857,6 +929,67 @@ class ClassView(QWidget):
             f"Đã copy {len(selected_classes)} lớp vào Clipboard!\nBạn có thể nhấn Ctrl+V để dán thẳng vào phần tùy chọn của Google Form."
         )
 
+    def open_gas_config_dialog(self) -> None:
+        """Mở hộp thoại cấu hình Google Apps Script."""
+        dialog = GASConfigDialog(self)
+        dialog.exec()
+
+    def auto_create_form(self) -> None:
+        """Gọi API Google Apps Script để tự động tạo Form và Sheet."""
+        current_year = self.cb_academic_year.currentText()
+        current_wave = self.cb_wave.currentText()
+        if not current_year or current_year == "Chưa có dữ liệu" or not current_wave or current_wave == "Chưa có đợt" or current_wave == "Tất cả":
+            QMessageBox.warning(self, "Cảnh báo", "Vui lòng chọn một Đợt cụ thể để tạo Form!")
+            return
+
+        web_app_url = self.settings.value("gas/web_app_url", "")
+        template_id = str(self.settings.value("gas/template_id", "")).strip()
+        secret = self.settings.value("gas/secret", "")
+        
+        # Tự động trích xuất ID nếu người dùng lỡ dán cả đường link Form
+        if "docs.google.com/forms/d/" in template_id:
+            match = re.search(r"/d/([a-zA-Z0-9-_]+)", template_id)
+            if match:
+                template_id = match.group(1)
+                self.settings.setValue("gas/template_id", template_id) # Cập nhật lại ID chuẩn vào hệ thống
+        
+        if not web_app_url or not template_id or not secret:
+            QMessageBox.information(self, "Thiết lập", "Bạn chưa cấu hình API Google Form. Vui lòng thiết lập ở hộp thoại tiếp theo.")
+            self.open_gas_config_dialog()
+            return
+            
+        selected_classes = []
+        for row in range(self.table.rowCount()):
+            item_check = self.table.item(row, 0)
+            if item_check and item_check.checkState() == Qt.CheckState.Checked:
+                # Tạo format hiển thị trên Form
+                class_code = self.table.item(row, 1).text()
+                class_name = self.table.item(row, 2).text()
+                location = self.table.item(row, 3).text()
+                session = self.table.item(row, 5).text()
+                schedule = self.table.item(row, 6).text()
+                time_slot = self.table.item(row, 7).text()
+                formatted_str = f"{class_name} - {session} {schedule} ({time_slot}) - {location} [Mã: {class_code}]"
+                selected_classes.append(formatted_str)
+                
+        if not selected_classes:
+            QMessageBox.warning(self, "Cảnh báo", "Vui lòng tick chọn ít nhất 1 lớp (ở cột Chọn) để đưa vào Form!")
+            return
+            
+        reply = QMessageBox.question(self, "Xác nhận", f"Hệ thống sẽ ra lệnh nhân bản Form Mẫu để tạo Form mới cho đợt '{current_wave}' với {len(selected_classes)} lớp học.\n\nQuá trình này có thể mất khoảng 10-15 giây. Bạn có muốn tiếp tục?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            response = ClassService.auto_create_google_form(web_app_url, secret, template_id, current_wave, selected_classes)
+            QApplication.restoreOverrideCursor()
+            
+            if response.get("status") == "success":
+                self.txt_form_link.setText(response.get("form_url", ""))
+                self.txt_sheet_link.setText(response.get("sheet_url", ""))
+                self.save_wave_links()
+                QMessageBox.information(self, "Thành công", f"Đã tự động tạo Form và Sheet thành công cho '{current_wave}'!\nLink đã được lưu vào hệ thống.")
+            else:
+                QMessageBox.critical(self, "Lỗi API", f"Không thể tạo Form:\n{response.get('message', 'Lỗi không xác định hoặc cấu hình sai')}")
+
     def import_google_form(self) -> None:
         """Đọc file Excel Google Form thô để đếm và cập nhật số lượng đăng ký lên Tab 1."""
         current_year = self.cb_academic_year.currentText()
@@ -890,12 +1023,15 @@ class ClassView(QWidget):
             try:
                 counts, warnings = RegistrationService.count_registrations_from_file(file_path, mode=mode_idx, students_db=students_db)
                 if not counts:
-                    QMessageBox.information(self, "Thông báo", "Không tìm thấy dữ liệu đăng ký hợp lệ trong file!\nVui lòng đảm bảo trong file có cột chứa mã lớp dạng '[Mã: LNH...]'")
+                    msg = "Không tìm thấy dữ liệu đăng ký hợp lệ trong file!\n\nNguyên nhân có thể do:\n1. File Excel không có cột nào chứa định dạng '[Mã: LNH...]'.\n2. TOÀN BỘ Mã Sinh Viên trong form đều không có trong 'Danh sách SV gốc' nên đã bị hệ thống lọc bỏ."
+                    if warnings:
+                        msg += f"\n\n⚠️ Hệ thống đã loại bỏ {len(warnings)} đăng ký do MSV không hợp lệ:\n" + "\n".join(warnings[:5])
+                    QMessageBox.warning(self, "Cảnh báo", msg)
                     return
                     
                 class_file_path = ClassService.get_file_path_for_year(current_year)
                 
-                ClassService.update_registration_counts(class_file_path, counts)
+                ClassService.update_registration_counts(class_file_path, current_wave, counts)
                 self.load_data()
                 
                 msg = f"Cập nhật thành công số lượng cho {len(counts)} rổ dự kiến:\n\n"
@@ -915,14 +1051,53 @@ class ClassView(QWidget):
                 QMessageBox.warning(self, "Lỗi", f"Có lỗi xảy ra khi đọc file:\n{e}")
 
     def start_accounting_sync(self) -> None:
-        """Bắt đầu quy trình đối chiếu file Excel từ Kế toán."""
-        file_path, _ = QFileDialog.getOpenFileName(
+        """Bắt đầu quy trình đối chiếu file Kế toán và file Google Form."""
+        QMessageBox.information(self, "Bước 1/2", "Đầu tiên, vui lòng chọn file KẾT QUẢ ĐĂNG KÝ (tải từ Google Form).")
+        form_file, _ = QFileDialog.getOpenFileName(
             self,
-            "Chọn file Excel danh sách sinh viên đã đóng tiền",
+            "Chọn file Đăng ký",
             "",
             "Excel Files (*.xlsx *.xls)"
         )
+        if not form_file: return
         
-        if file_path:
-            QMessageBox.information(self, "Thông báo", f"Đã chọn file:\n{file_path}\n\nTính năng xử lý file sẽ được phát triển ở bước tiếp theo!")
-            # TODO: Gọi RegistrationService để xử lý file tại đây
+        QMessageBox.information(self, "Bước 2/2", "Tiếp theo, vui lòng chọn file KẾ TOÁN (Danh sách chuyển khoản).")
+        acc_file, _ = QFileDialog.getOpenFileName(
+            self,
+            "Chọn file Kế toán",
+            "",
+            "Excel Files (*.xlsx *.xls)"
+        )
+        if not acc_file: return
+        
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            from apps.main_app.src.services.student_service import StudentService
+            students_db = StudentService.get_students_from_excel(StudentService.get_file_path())
+            
+            results, stats = RegistrationService.sync_accounting_with_form(form_file, acc_file, students_db)
+            
+            self.sync_results_table.setRowCount(len(results))
+            for i, res in enumerate(results):
+                self.sync_results_table.setItem(i, 0, QTableWidgetItem(str(i+1)))
+                self.sync_results_table.setItem(i, 1, QTableWidgetItem(res["student_name"]))
+                self.sync_results_table.setItem(i, 2, QTableWidgetItem(res["student_id"]))
+                self.sync_results_table.setItem(i, 3, QTableWidgetItem(res["class_code"]))
+                
+                item_status = QTableWidgetItem(res["status"])
+                font = item_status.font()
+                font.setBold(True)
+                item_status.setFont(font)
+                if res["status"] == "Hợp lệ": item_status.setForeground(QColor("#16A34A"))
+                elif "Lệch" in res["status"]: item_status.setForeground(QColor("#D97706"))
+                else: item_status.setForeground(QColor("#DC2626"))
+                self.sync_results_table.setItem(i, 4, item_status)
+                
+                self.sync_results_table.setItem(i, 5, QTableWidgetItem(res["detail"]))
+                
+            self.lbl_sync_stats.setText(f"Thống kê: {stats['hop_le']} Hợp lệ | {stats['lech_khop']} Lệch khớp | {stats['chua_dong']} Chưa đóng tiền")
+            QApplication.restoreOverrideCursor()
+            QMessageBox.information(self, "Hoàn tất", f"Đã đối chiếu xong!\n\n- Hợp lệ: {stats['hop_le']}\n- Lệch khớp: {stats['lech_khop']}\n- Chưa đóng tiền: {stats['chua_dong']}")
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.critical(self, "Lỗi", f"Có lỗi xảy ra khi xử lý file:\n{e}")

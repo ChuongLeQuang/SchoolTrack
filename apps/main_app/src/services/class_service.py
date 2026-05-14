@@ -383,10 +383,10 @@ class ClassService:
         ClassService.update_class_in_wave_metadata(class_info.year_code, wave_name, class_info.class_code, "add")
 
     @staticmethod
-    def update_registration_counts(file_path: str, counts: Dict[str, int]) -> None:
+    def update_registration_counts(file_path: str, wave_name: str, counts: Dict[str, int]) -> None:
         """
-        EN: Update 'SL Hiện tại' for multiple classes based on registration counts across all sheets.
-        VI: Cập nhật 'SL Hiện tại' cho nhiều lớp dựa trên số lượng đăng ký trên tất cả các sheet.
+        EN: Update 'SL Hiện tại' for classes in a specific wave based on registration counts.
+        VI: Cập nhật 'SL Hiện tại' cho các lớp thuộc một đợt cụ thể.
         """
         import openpyxl
         if not os.path.exists(file_path):
@@ -395,35 +395,42 @@ class ClassService:
         wb = openpyxl.load_workbook(file_path)
         updated = False
         
-        for sheet in wb.worksheets:
-            if sheet.title.startswith("_") or "filter" in sheet.title.lower():
-                continue
+        # Chỉ chọn và xử lý duy nhất Sheet của Đợt hiện tại
+        if wave_name in wb.sheetnames:
+            sheet = wb[wave_name]
+            if not (sheet.title.startswith("_") or "filter" in sheet.title.lower()):
+                headers = [str(sheet.cell(row=1, column=c).value).strip().lower() if sheet.cell(row=1, column=c).value else "" for c in range(1, sheet.max_column + 1)]
                 
-            headers = [str(sheet.cell(row=1, column=c).value).strip().lower() if sheet.cell(row=1, column=c).value else "" for c in range(1, sheet.max_column + 1)]
-            
-            code_col_idx = -1
-            for i, h in enumerate(headers):
-                if h in ["mã lớp", "class code", "mã"]:
-                    code_col_idx = i + 1
-                    break
-            if code_col_idx == -1: continue
-                
-            count_col_idx = -1
-            for i, h in enumerate(headers):
-                if h in ["sl hiện tại", "sl now", "đăng ký"]:
-                    count_col_idx = i + 1
-                    break
-            if count_col_idx == -1:
-                count_col_idx = sheet.max_column + 1
-                sheet.cell(row=1, column=count_col_idx, value="SL Hiện tại")
-            
-            for row_num in range(2, sheet.max_row + 1):
-                cell_val = sheet.cell(row=row_num, column=code_col_idx).value
-                if cell_val is not None:
-                    code_val = str(cell_val).strip()
-                    if code_val in counts:
-                        sheet.cell(row=row_num, column=count_col_idx, value=counts[code_val])
-                        updated = True
+                code_col_idx = -1
+                for i, h in enumerate(headers):
+                    if h in ["mã lớp", "class code", "mã"]:
+                        code_col_idx = i + 1
+                        break
+                        
+                if code_col_idx != -1:
+                    count_col_idx = -1
+                    for i, h in enumerate(headers):
+                        if h in ["sl hiện tại", "sl now", "đăng ký"]:
+                            count_col_idx = i + 1
+                            break
+                    if count_col_idx == -1:
+                        count_col_idx = sheet.max_column + 1
+                        sheet.cell(row=1, column=count_col_idx, value="SL Hiện tại")
+                    
+                    for row_num in range(2, sheet.max_row + 1):
+                        cell_val = sheet.cell(row=row_num, column=code_col_idx).value
+                        if cell_val is not None:
+                            code_val = str(cell_val).strip()
+                            # Cập nhật số lượng đếm được, nếu không có ai thì trả về 0 để reset số ảo cũ
+                            new_count = counts.get(code_val, 0)
+                            
+                            current_count_val = sheet.cell(row=row_num, column=count_col_idx).value
+                            try: current_count = int(current_count_val) if current_count_val is not None else 0
+                            except ValueError: current_count = -1
+                            
+                            if current_count != new_count:
+                                sheet.cell(row=row_num, column=count_col_idx, value=new_count)
+                                updated = True
                         
         if updated:
             wb.save(file_path)
@@ -499,6 +506,37 @@ class ClassService:
             json.dump(data, f, indent=4, ensure_ascii=False)
 
     @staticmethod
+    def auto_create_google_form(web_app_url: str, secret: str, template_id: str, wave_name: str, classes: List[str]) -> Dict[str, str]:
+        """
+        EN: Sends a request to Google Apps Script to auto-generate a Form and linked Sheet.
+        VI: Gửi request lên Google Apps Script để tự động tạo Form và Sheet.
+        """
+        payload = {
+            "secret": secret,
+            "wave_name": wave_name,
+            "classes": classes,
+            "template_id": template_id
+        }
+        try:
+            # allow_redirects=True rất quan trọng vì Google Scripts thường điều hướng redirect
+            response = requests.post(web_app_url, json=payload, timeout=60, allow_redirects=True)
+            response.raise_for_status()
+            
+            try:
+                return response.json()
+            except Exception as json_err:
+                # Bắt lỗi nếu Google trả về trang HTML thay vì JSON (thường do sai quyền truy cập)
+                raw_text = response.text.strip()
+                if "<html" in raw_text.lower() or "<!doctype html>" in raw_text.lower():
+                    return {
+                        "status": "error", 
+                        "message": "Google trả về trang Web (HTML) thay vì dữ liệu JSON.\n\nNguyên nhân thường gặp:\n1. Chưa chọn quyền truy cập là 'Bất kỳ ai' (Anyone) khi Deploy.\n2. URL Web App bị sai (phải kết thúc bằng /exec).\n3. Bạn copy nhầm Form ID hoặc thiếu quyền thao tác."
+                    }
+                return {"status": "error", "message": f"Google phản hồi sai định dạng. Dữ liệu thô:\n{raw_text[:200]}"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    @staticmethod
     def update_class_in_wave_metadata(year: str, wave: str, class_code: str, action: str) -> None:
         """
         EN: Add or remove a class_code from the wave metadata JSON.
@@ -537,11 +575,8 @@ class ClassService:
             return False
         sheet_id = id_match.group(1)
 
-        # Extract GID (optional, defaults to first sheet if not found)
-        gid_match = re.search(r"gid=([0-9]+)", sheet_url)
-        gid = gid_match.group(1) if gid_match else "0"
-
-        export_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=xlsx&gid={gid}"
+        # Tải toàn bộ file Workbook (tất cả các Sheet) thay vì chỉ tải 1 sheet mặc định
+        export_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=xlsx"
         
         # Thêm resourcekey nếu có trong link gốc (Google Form thường sinh ra tham số này)
         resourcekey_match = re.search(r"resourcekey=([a-zA-Z0-9-_]+)", sheet_url)

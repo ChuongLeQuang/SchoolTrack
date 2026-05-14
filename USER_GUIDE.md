@@ -93,6 +93,92 @@ Mỗi **Đợt** sẽ được gắn với một cặp link Google Form riêng.
     *   Nhấn nút `📋 Copy cho Google Form`.
     *   Mở Google Form của bạn, đi đến câu hỏi trắc nghiệm chọn lớp và nhấn `Ctrl+V` để dán toàn bộ danh sách vào.
 
+#### 🪄 Tự động tạo Form bằng API (Khuyên dùng)
+
+Thay vì phải làm thủ công, bạn có thể cấu hình để phần mềm tự động nhân bản Form mẫu và chèn danh sách lớp học giúp bạn.
+
+**Bước 1: Chuẩn bị Form Mẫu trên Google Drive**
+1. Mở Google Drive của trung tâm, tạo một Google Biểu mẫu (Form) mới.
+2. Trang trí form thật đẹp (thêm logo, màu sắc) và thiết lập các câu hỏi thu thập thông tin cơ bản (Họ tên, Mã SV, SĐT, Email...).
+3. **Lưu ý:** KHÔNG tạo câu hỏi chọn lớp học ở đây. Phần mềm sẽ tự động gắn nó vào sau.
+4. Copy **ID của Form Mẫu**. (ID là đoạn mã nằm giữa `/d/` và `/edit` trên thanh địa chỉ trang web của trình duyệt).
+
+**Bước 2: Cài đặt "Nhân viên ảo" (Google Apps Script)**
+1. Truy cập vào `script.google.com` và nhấn **Dự án mới** (New Project).
+2. Xóa hết mã cũ và dán đoạn mã (script) mà đội ngũ kỹ thuật cung cấp vào đó. Nhấn nút **Lưu** (Save).
+2. Xóa hết mã cũ và dán đoạn mã (script) dưới đây vào đó. Nhấn nút **Lưu** (Save).
+
+   ```javascript
+   function doPost(e) {
+     try {
+       var payload = JSON.parse(e.postData.contents);
+       var secret = payload.secret;
+       var waveName = payload.wave_name;
+       var classes = payload.classes;
+       var templateId = payload.template_id;
+
+       // 1. Kiểm tra mật khẩu (Bạn có thể đổi mật khẩu này)
+       if (secret !== "mat_khau_cua_trung_tam_123") {
+         return ContentService.createTextOutput(JSON.stringify({status: "error", message: "Sai Mật khẩu bảo mật!"})).setMimeType(ContentService.MimeType.JSON);
+       }
+
+       // 2. Tạo file Excel (Spreadsheet) mới để lưu ai đăng ký
+       var newSheet = SpreadsheetApp.create("Kết quả Đăng ký - " + waveName);
+
+       // 3. Nhân bản cái Form Mẫu bạn đã làm ở Bước 1
+       var templateFile = DriveApp.getFileById(templateId);
+       var newFile = templateFile.makeCopy("Đăng ký Lớp học - " + waveName);
+       var newForm = FormApp.openById(newFile.getId());
+       
+       // 4. Móc nối Form mới với Sheet mới
+       newForm.setDestination(FormApp.DestinationType.SPREADSHEET, newSheet.getId());
+       
+       // 5. Tự động chèn thêm câu hỏi "Chọn lớp" vào cuối Form
+       var item = newForm.addMultipleChoiceItem();
+       item.setTitle("Vui lòng chọn Lớp học bạn muốn đăng ký:");
+       item.setChoiceValues(classes);
+       item.setRequired(true);
+
+       // 6. Báo cáo về cho phần mềm SchoolTrack biết đã làm xong
+       return ContentService.createTextOutput(JSON.stringify({
+         status: "success", 
+         form_url: newForm.getPublishedUrl(), 
+         sheet_url: newSheet.getUrl()
+       })).setMimeType(ContentService.MimeType.JSON);
+
+     } catch (error) {
+       return ContentService.createTextOutput(JSON.stringify({status: "error", message: error.toString()})).setMimeType(ContentService.MimeType.JSON);
+     }
+   }
+   ```
+3. Nhấn nút màu xanh **Triển khai** (Deploy) ở góc phải -> Chọn **Triển khai mới** (New deployment).
+4. Ở mục Chọn loại (Select type), chọn hình bánh răng cưa -> **Ứng dụng Web** (Web app).
+5. Thiết lập chính xác như sau:
+   * Thực thi dưới dạng (Execute as): **Tôi** (Me).
+   * Người có quyền truy cập (Who has access): **Bất kỳ ai** (Anyone). *(Bắt buộc)*
+6. Nhấn **Triển khai** (Deploy). Nếu Google hỏi quyền, hãy cấp quyền cho nó.
+7. Copy lại đường link **Web App URL** dài loằng ngoằng vừa hiện ra.
+
+**Bước 3: Cấu hình trên phần mềm SchoolTrack**
+1. Mở SchoolTrack, vào Tab *Quản lý Lớp học*.
+2. Nhấn nút `⚙️ Cấu hình API Google Form`.
+3. Dán **Web App URL** (lấy ở bước 2), **Form Mẫu ID** (lấy ở bước 1) và **Mật khẩu** (Secret Token) vào. Nhấn Lưu.
+
+**Bước 4: Sử dụng**
+1. Tick chọn các lớp dự kiến bạn muốn mở đăng ký trên bảng.
+2. Nhấn nút `🪄 Tự động tạo Form`. Chờ khoảng 10 giây, phần mềm sẽ báo thành công và tự động điền 2 đường link mới vào ô.
+
+> ⚠️ **LƯU Ý QUAN TRỌNG (Các bước làm thủ công bắt buộc):**
+> Do chính sách bảo mật khắt khe của Google (đặc biệt trên các tài khoản cá nhân và tài khoản cấp phát nội bộ), tính năng API chưa thể tự động mở khóa 100%. **Sau khi tạo form thành công, bạn BẮT BUỘC phải làm 2 việc sau:**
+> 
+> 1. **Mở công khai Form:** 
+>    - Nhấn nút `🌐 Mở Form` trên phần mềm.
+>    - (Nếu dùng tài khoản tổ chức) Chuyển sang tab **Cài đặt** (Settings), kéo xuống phần Câu trả lời, TẮT mục *"Hạn chế ở người dùng trong tổ chức"*. Nếu không tắt, sinh viên sẽ không thể điền form.
+> 2. **Chia sẻ Sheet (Cho phép phần mềm tải về):**
+>    - Nhấn nút `🌐 Mở Sheet` trên phần mềm.
+>    - Nhấn nút **Chia sẻ** (Share) màu xanh ở góc phải trên cùng.
+>    - Đổi Quyền truy cập chung thành **Bất kỳ ai có đường liên kết** (Anyone with the link). Nếu không làm bước này, khi bạn bấm "📥 Tải File", phần mềm sẽ báo lỗi file bị khóa.
+
 #### Cập nhật Số lượng Đăng ký (Tính năng quan trọng)
 
 Sau khi sinh viên điền Form, bạn cần cập nhật số lượng đăng ký thực tế vào phần mềm.
@@ -121,8 +207,6 @@ Sau khi sinh viên đăng ký và đi đóng tiền, bộ phận Kế toán sẽ
     *   **Hợp lệ**: Sinh viên vừa có trong danh sách đăng ký, vừa có trong danh sách đóng tiền.
     *   **Lệch khớp**: Sinh viên có đóng tiền nhưng MSV hoặc Mã lớp không khớp với dữ liệu gốc.
     *   **Chưa đóng tiền**: Sinh viên có đăng ký nhưng không có tên trong file của Kế toán.
-
-*(Lưu ý: Tính năng xử lý chi tiết đang trong quá trình phát triển)*
 
 ### 4.4. Giai đoạn 3: Chốt Lớp & Phân bổ
 

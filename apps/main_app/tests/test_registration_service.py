@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from apps.main_app.src.services.registration_service import RegistrationService
 
 
@@ -39,12 +39,17 @@ def test_extract_class_code() -> None:
     assert RegistrationService.extract_class_code("Không có mã ở đây") == ""
 
 
+@patch("openpyxl.load_workbook")
 @patch("apps.main_app.src.services.excel_service.ExcelService.load_excel_data")
-def test_count_registrations_from_file(mock_load_excel) -> None:
+def test_count_registrations_from_file(mock_load_excel, mock_load_workbook) -> None:
     """
     EN: Test counting registrations from an Excel file data map.
     VI: Kiểm thử việc đếm số lượng đăng ký từ dữ liệu file Excel.
     """
+    mock_wb = MagicMock()
+    mock_wb.sheetnames = ["Sheet1"]
+    mock_load_workbook.return_value = mock_wb
+    
     mock_load_excel.return_value = [
         {"Cột bất kỳ": "Tiếng Anh Level 2 - Tối [Mã: LNH0526NDB]"},
         {"Chọn lớp": "Tiếng Anh Level 1 - Tối [Mã: LNH0526NEA]"},

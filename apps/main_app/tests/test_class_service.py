@@ -172,7 +172,7 @@ def test_update_registration_counts(mock_load_workbook, mock_exists) -> None:
     mock_load_workbook.return_value = mock_wb
     counts = {"LNH0825NEA": 5, "LNH0825NEB": 3}
     
-    ClassService.update_registration_counts("fake.xlsx", counts)
+    ClassService.update_registration_counts("fake.xlsx", "Đợt 1", counts)
     
     assert mock_load_workbook.called
 

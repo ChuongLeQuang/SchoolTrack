@@ -1,8 +1,8 @@
 {
     "2025-2026": {
         "Đợt 1 - 0626": {
-            "form_link": "https://docs.google.com/forms/d/e/1FAIpQLSeNQppIf0YbVWwat1LOpKWLgOcE4VxNXzzq8hRgQA0VaI7S5g/viewform?usp=publish-editor",
-            "sheet_link": "https://docs.google.com/spreadsheets/d/1bH0aCwOggN5YsVkuoBlDwuO0XNphOEtM6QG4PXoDq4c/edit?resourcekey=&gid=1593509877#gid=1593509877",
+            "form_link": "https://docs.google.com/forms/d/e/1FAIpQLSfx5jvIDHOhOzDGY5rADsWjHGBUjbYWS7E6_JNJNtJ61sI21w/viewform",
+            "sheet_link": "https://docs.google.com/spreadsheets/d/19o03NLbD-ETsZ15Xl3cWcLjs3OvMc2VNBtos_bXoLyQ/edit",
             "classes": [
                 "LNH0526NEA",
                 "LNH0526NEB",
@@ -17,13 +17,6 @@
             "classes": [
                 "LNH1026NGA",
                 "LNH1026NQA"
-            ]
-        },
-        "Tất cả": {
-            "form_link": "",
-            "sheet_link": "",
-            "classes": [
-                "LNH0626NQA"
             ]
         }
     }
