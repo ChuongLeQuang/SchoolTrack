@@ -13,10 +13,13 @@ class ConfigService:
     @staticmethod
     def _get_config_path() -> str:
         if getattr(sys, 'frozen', False):
-            project_root = os.path.dirname(sys.executable)
+            # In frozen app, config is in a 'config' folder at the root of the bundle
+            base_path = sys._MEIPASS
+            return os.path.join(base_path, "config", "class_templates.json")
         else:
+            # In dev, it's in the source tree
             project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-        return os.path.join(project_root, "apps", "main_app", "src", "config", "class_templates.json")
+            return os.path.join(project_root, "apps", "main_app", "src", "config", "class_templates.json")
 
     @staticmethod
     def get_config_data(file_path: str = None) -> Dict[str, Any]:

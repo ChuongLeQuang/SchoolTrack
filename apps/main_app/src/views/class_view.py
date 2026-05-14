@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QHeaderView, QTableWidgetItem, QMessageBox,
                              QComboBox, QInputDialog, QStackedWidget, QApplication, 
                              QFileDialog, QGroupBox)
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QSettings
 from PyQt6.QtGui import QColor, QPixmap
 import os
 import sys
@@ -24,6 +24,7 @@ class ClassView(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.is_data_loaded = False
+        self.settings = QSettings("SchoolTrackOrg", "SchoolTrack")
         self._setup_ui()
         self._load_academic_years()
 
@@ -131,6 +132,20 @@ class ClassView(QWidget):
         self.btn_copy_form.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_copy_form.clicked.connect(self.copy_for_google_form)
 
+        self.cb_import_mode = QComboBox()
+        self.cb_import_mode.addItems([
+            "1. Lọc cứng (Bỏ qua MSV sai)",
+            "2. Cảnh báo (Báo lỗi MSV sai)",
+            "3. Thông minh (Tự sửa MSV sai)"
+        ])
+        self.cb_import_mode.setStyleSheet("padding: 6px; font-size: 13px; font-weight: bold; color: #4B5563;")
+        self.cb_import_mode.setToolTip("Cách xử lý khi Sinh viên nhập sai Mã sinh viên trong Form")
+
+        # Tải và lưu chế độ mặc định
+        saved_mode_index = self.settings.value("class_view/import_mode", 0, type=int)
+        self.cb_import_mode.setCurrentIndex(saved_mode_index)
+        self.cb_import_mode.currentIndexChanged.connect(self._save_import_mode_setting)
+
         self.btn_import_google_form = QPushButton("📥 Cập nhật SL Đăng ký")
         self.btn_import_google_form.setStyleSheet("padding: 6px 15px; font-weight: bold; font-size: 14px; background-color: #8B5CF6; color: white; border: none; border-radius: 5px;")
         self.btn_import_google_form.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -161,6 +176,7 @@ class ClassView(QWidget):
         toolbar_layout.addWidget(self.search_input)
         toolbar_layout.addStretch()
         toolbar_layout.addWidget(self.btn_copy_form)
+        toolbar_layout.addWidget(self.cb_import_mode)
         toolbar_layout.addWidget(self.btn_import_google_form)
         toolbar_layout.addWidget(self.btn_add)
         toolbar_layout.addWidget(self.btn_edit)
@@ -329,6 +345,13 @@ class ClassView(QWidget):
         elif index == 2:
             self.lbl_phase_title.setText("✅ 3. Chốt Lớp & Phân bổ")
 
+    def _save_import_mode_setting(self, index: int) -> None:
+        """
+        EN: Save the selected import mode to settings.
+        VI: Lưu chế độ cập nhật đã chọn vào cài đặt.
+        """
+        self.settings.setValue("class_view/import_mode", index)
+
     def _load_academic_years(self) -> None:
         """Quét thư mục data để lấy danh sách các file Niên khóa."""
         self.cb_academic_year.blockSignals(True)
@@ -349,6 +372,11 @@ class ClassView(QWidget):
         current_year = self.cb_academic_year.currentText()
         if current_year and current_year != "Chưa có dữ liệu":
             waves = ClassService.get_waves_for_year(current_year)
+            
+            # Lọc bỏ sheet "Tất cả" nếu nó đã bị tạo nhầm từ lỗi trước đó
+            if waves:
+                waves = [w for w in waves if w != "Tất cả"]
+                
             if waves:
                 # Thêm "Tất cả" vào đầu danh sách nếu có đợt
                 self.cb_wave.addItem("Tất cả")
@@ -377,6 +405,14 @@ class ClassView(QWidget):
         self.txt_form_link.setEnabled(not is_all_waves)
         self.txt_sheet_link.setEnabled(not is_all_waves)
         self.btn_save_links.setEnabled(not is_all_waves)
+        
+        # Khóa các nút thao tác trực tiếp với dữ liệu khi đang xem "Tất cả"
+        self.btn_add.setEnabled(not is_all_waves)
+        self.btn_edit.setEnabled(not is_all_waves)
+        self.btn_delete.setEnabled(not is_all_waves)
+        self.btn_import_google_form.setEnabled(not is_all_waves)
+        self.btn_rename_wave.setEnabled(not is_all_waves)
+        self.btn_delete_wave.setEnabled(not is_all_waves)
         
         if is_all_waves:
             self.txt_form_link.setText("")
@@ -488,7 +524,8 @@ class ClassView(QWidget):
             
         wave_name, ok = QInputDialog.getText(self, "Tạo Đợt Mới", f"Nhập tên đợt mới cho {current_year}\n(VD: Đợt 2, Tháng 10...):")
         if ok and wave_name.strip():
-            wave_name = wave_name.strip()
+            # Chuẩn hóa khoảng trắng (xóa dấu cách thừa ở đầu, cuối và giữa)
+            wave_name = ' '.join(wave_name.strip().split())
             try:
                 if ClassService.create_wave_in_year(current_year, wave_name):
                     QMessageBox.information(self, "Thành công", f"Đã tạo đợt '{wave_name}' thành công!")
@@ -506,10 +543,18 @@ class ClassView(QWidget):
         if not current_year or current_year == "Chưa có dữ liệu" or not current_wave or current_wave == "Chưa có đợt":
             QMessageBox.warning(self, "Cảnh báo", "Vui lòng chọn một Đợt để sửa tên!")
             return
+            
+        if current_wave == "Tất cả":
+            QMessageBox.warning(self, "Cảnh báo", "Không thể đổi tên tùy chọn 'Tất cả'!")
+            return
 
         new_name, ok = QInputDialog.getText(self, "Đổi Tên Đợt", f"Nhập tên mới cho đợt '{current_wave}':", text=current_wave)
-        if ok and new_name.strip() and new_name.strip() != current_wave:
-            new_name = new_name.strip()
+        if ok and new_name.strip():
+            new_name = ' '.join(new_name.strip().split())
+            
+            if new_name == current_wave:
+                return
+                
             try:
                 if ClassService.rename_wave(current_year, current_wave, new_name):
                     QMessageBox.information(self, "Thành công", f"Đã đổi tên đợt thành '{new_name}'!")
@@ -527,6 +572,10 @@ class ClassView(QWidget):
         current_wave = self.cb_wave.currentText()
         if not current_year or current_year == "Chưa có dữ liệu" or not current_wave or current_wave == "Chưa có đợt":
             QMessageBox.warning(self, "Cảnh báo", "Vui lòng chọn một Đợt để xóa!")
+            return
+            
+        if current_wave == "Tất cả":
+            QMessageBox.warning(self, "Cảnh báo", "Không thể xóa tùy chọn 'Tất cả'!")
             return
 
         reply = QMessageBox.question(self, "Xác nhận xóa", 
@@ -641,6 +690,10 @@ class ClassView(QWidget):
         if not current_year or current_year == "Chưa có dữ liệu" or not current_wave or current_wave == "Chưa có đợt":
             QMessageBox.warning(self, "Cảnh báo", "Vui lòng chọn Niên khóa và Đợt trước khi thêm lớp!")
             return
+            
+        if current_wave == "Tất cả":
+            QMessageBox.warning(self, "Cảnh báo", "Vui lòng chọn một Đợt cụ thể để thêm lớp!")
+            return
 
         existing_codes = []
         for row in range(self.table.rowCount()):
@@ -679,6 +732,10 @@ class ClassView(QWidget):
         if not current_year or current_year == "Chưa có dữ liệu" or not current_wave or current_wave == "Chưa có đợt":
             return
             
+        if current_wave == "Tất cả":
+            QMessageBox.warning(self, "Cảnh báo", "Vui lòng chọn một Đợt cụ thể để xóa lớp!")
+            return
+            
         current_row = self.table.currentRow()
         if current_row < 0:
             QMessageBox.warning(self, "Cảnh báo", "Vui lòng chọn một lớp để xóa!")
@@ -714,6 +771,10 @@ class ClassView(QWidget):
         current_year = self.cb_academic_year.currentText()
         current_wave = self.cb_wave.currentText()
         if not current_year or current_year == "Chưa có dữ liệu" or not current_wave or current_wave == "Chưa có đợt":
+            return
+            
+        if current_wave == "Tất cả":
+            QMessageBox.warning(self, "Cảnh báo", "Vui lòng chọn một Đợt cụ thể để sửa thông tin lớp!")
             return
             
         current_row = self.table.currentRow()
@@ -808,6 +869,16 @@ class ClassView(QWidget):
             QMessageBox.warning(self, "Cảnh báo", "Vui lòng chọn một Đợt cụ thể để hệ thống biết đang cập nhật cho đợt nào!")
             return
 
+        # Tải danh sách Sinh viên gốc từ Excel để hệ thống lấy làm "Từ điển" đối chiếu
+        from apps.main_app.src.services.student_service import StudentService
+        try:
+            students_db = StudentService.get_students_from_excel(StudentService.get_file_path())
+        except Exception as e:
+            QMessageBox.warning(self, "Lỗi dữ liệu", f"Không thể tải danh sách Sinh viên gốc để đối chiếu:\n{e}")
+            return
+            
+        mode_idx = self.cb_import_mode.currentIndex() + 1
+
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Chọn file Excel tải từ Google Form",
@@ -817,7 +888,7 @@ class ClassView(QWidget):
         
         if file_path:
             try:
-                counts = RegistrationService.count_registrations_from_file(file_path)
+                counts, warnings = RegistrationService.count_registrations_from_file(file_path, mode=mode_idx, students_db=students_db)
                 if not counts:
                     QMessageBox.information(self, "Thông báo", "Không tìm thấy dữ liệu đăng ký hợp lệ trong file!\nVui lòng đảm bảo trong file có cột chứa mã lớp dạng '[Mã: LNH...]'")
                     return
@@ -830,6 +901,13 @@ class ClassView(QWidget):
                 msg = f"Cập nhật thành công số lượng cho {len(counts)} rổ dự kiến:\n\n"
                 for code, count in counts.items():
                     msg += f"• {code}: {count} SV\n"
+                    
+                if warnings:
+                    msg += f"\n⚠️ CÓ {len(warnings)} LỖI MSV TRONG FORM (Đã bỏ qua):\n"
+                    msg += "\n".join(warnings[:10])
+                    if len(warnings) > 10:
+                        msg += f"\n... và {len(warnings) - 10} trường hợp gõ sai MSV khác."
+                        
                 QMessageBox.information(self, "Thành công", msg)
             except PermissionError:
                 QMessageBox.warning(self, "Lỗi truy cập", "File Excel đang được mở.\nVui lòng đóng file trước khi cập nhật!")

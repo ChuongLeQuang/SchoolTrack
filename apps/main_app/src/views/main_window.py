@@ -1,10 +1,13 @@
-from PyQt6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QStackedWidget
+from PyQt6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QFrame, QStackedWidget, QMessageBox
 from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtGui import QCloseEvent, QPixmap
 import os
 import sys
+import logging
+import markdown
 from apps.main_app.src.views.student_view import StudentView
 from apps.main_app.src.views.class_view import ClassView
+from apps.main_app.src.views.help_dialog import HelpDialog
 
 
 class MainWindow(QMainWindow):
@@ -60,7 +63,8 @@ class MainWindow(QMainWindow):
         btn_dashboard = QPushButton("📊  Dashboard")
         btn_students = QPushButton("🧑‍🎓  Quản lý Sinh viên")
         btn_classes = QPushButton("🏫  Quản lý Lớp học")
-        btn_registration = QPushButton("📝  Đăng ký Lớp")
+        # btn_registration = QPushButton("📝  Đăng ký Lớp") # Tính năng này đã được gộp vào ClassView Tab 1
+        btn_user_guide = QPushButton("❓  Hướng dẫn sử dụng")
 
         # Style for buttons
         button_style = """
@@ -68,7 +72,7 @@ class MainWindow(QMainWindow):
                 padding: 10px 15px; text-align: left; font-size: 16px; font-weight: bold;
             }
         """
-        for btn in [btn_dashboard, btn_students, btn_classes, btn_registration]:
+        for btn in [btn_dashboard, btn_students, btn_classes, btn_user_guide]:
             btn.setStyleSheet(button_style)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             sidebar_layout.addWidget(btn)
@@ -174,6 +178,52 @@ class MainWindow(QMainWindow):
         self.btn_sub_plan.clicked.connect(lambda: [self.content_stack.setCurrentIndex(2), self.class_view.set_active_screen(0)])
         self.btn_sub_sync.clicked.connect(lambda: [self.content_stack.setCurrentIndex(2), self.class_view.set_active_screen(1)])
         self.btn_sub_final.clicked.connect(lambda: [self.content_stack.setCurrentIndex(2), self.class_view.set_active_screen(2)])
+        
+        btn_user_guide.clicked.connect(self._open_user_guide)
+
+    def _open_user_guide(self) -> None:
+        """
+        EN: Opens the user guide in a dedicated, styled help dialog.
+        VI: Mở file hướng dẫn sử dụng trong một hộp thoại chuyên dụng, có định dạng.
+        """
+        if getattr(sys, 'frozen', False):
+            project_root = sys._MEIPASS
+        else:
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+            
+        user_guide_path = os.path.join(project_root, "USER_GUIDE.md")
+
+        if not os.path.exists(user_guide_path):
+            logging.error(f"User guide file not found: {user_guide_path}")
+            QMessageBox.warning(self, "Lỗi", "Không tìm thấy file hướng dẫn sử dụng (USER_GUIDE.md)!")
+            return
+
+        try:
+            with open(user_guide_path, "r", encoding="utf-8") as f:
+                markdown_text = f.read()
+            
+            html = markdown.markdown(markdown_text, extensions=['tables', 'fenced_code'])
+            
+            css = """
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; line-height: 1.6; font-size: 15px; }
+                h1, h2, h3 { border-bottom: 1px solid #dfe2e5; padding-bottom: 0.3em; }
+                h1 { font-size: 2em; } h2 { font-size: 1.5em; } h3 { font-size: 1.25em; }
+                code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; background-color: rgba(27,31,35,0.05); padding: 0.2em 0.4em; margin: 0; font-size: 85%; border-radius: 3px; }
+                pre { padding: 16px; overflow: auto; font-size: 85%; line-height: 1.45; background-color: #f6f8fa; border-radius: 3px; }
+                pre > code { padding: 0; margin: 0; font-size: 100%; word-break: normal; white-space: pre; background: transparent; border: 0; }
+                table { border-collapse: collapse; }
+                th, td { border: 1px solid #dfe2e5; padding: 6px 13px; }
+                th { font-weight: 600; }
+                ul { padding-left: 2em; }
+            </style>
+            """
+            
+            dialog = HelpDialog(css + html, self)
+            dialog.exec()
+        except Exception as e:
+            logging.error(f"Lỗi khi mở file hướng dẫn: {e}")
+            QMessageBox.critical(self, "Lỗi", f"Không thể mở file hướng dẫn sử dụng:\n{e}")
 
     def on_screen_changed(self, index: int) -> None:
         """

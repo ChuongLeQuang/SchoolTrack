@@ -6,8 +6,8 @@
 
 - **🧑‍🎓 Quản lý Sinh viên**: Lưu trữ, tra cứu và cập nhật trạng thái học tập của sinh viên.
 - **🏫 Kế hoạch Lớp học**: Tự động sinh mã lớp dự kiến (10 ký tự) dựa trên hệ thống cấu hình thông minh (Level, Ca học, Giờ học).
-- **📝 Quản lý Niên khóa & Đợt**: Tổ chức dữ liệu theo từng "Đợt" gọn gàng. Hỗ trợ gắn link Google Form và Google Sheet riêng biệt cho từng Đợt.
-- **💰 Đối chiếu Kế toán**: Tự động đọc file Excel Kế toán, bóc tách mã lớp bằng Regex và đối chiếu tình trạng đóng tiền.
+- **📝 Quản lý Niên khóa & Đợt**: Tổ chức dữ liệu theo từng "Đợt" (Sheet). Hệ thống chống trùng lặp tên đợt thông minh, tích hợp chế độ xem "Tất cả" an toàn (chỉ đọc). Hỗ trợ gắn link Google Form và Google Sheet riêng biệt cho từng Đợt.
+- **� Đối chiếu Kế toán**: Tự động đọc file Excel Kế toán, bóc tách mã lớp bằng Regex và đối chiếu tình trạng đóng tiền.
 - **📊 Thống kê trực quan**: Bảng Dashboard (Sắp ra mắt), đếm số lượng đăng ký tự động và phân loại lớp (Mở/Hủy/Chờ).
 
 ## 🚀 Công Nghệ Sử Dụng

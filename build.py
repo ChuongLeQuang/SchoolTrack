@@ -101,6 +101,7 @@ def build_app() -> None:
     elif os.path.exists(icon_path_png) and platform.system() != "Windows": pyinstaller_args.append(f"--icon={icon_path_png}")
         
     if os.path.exists("assets"): pyinstaller_args.append(f"--add-data=assets{separator}assets")
+    if os.path.exists(os.path.join("apps", "main_app", "src", "config")): pyinstaller_args.append(f"--add-data=apps/main_app/src/config{separator}config")
     if os.path.exists("templates"): pyinstaller_args.append(f"--add-data=templates{separator}templates")
     if os.path.exists("static"): pyinstaller_args.append(f"--add-data=static{separator}static")
     
@@ -110,6 +111,7 @@ def build_app() -> None:
             
     with open("version.txt", "w", encoding="utf-8") as f: f.write(new_version)
     if os.path.exists("version.txt"): pyinstaller_args.append(f"--add-data=version.txt{separator}.")
+    if os.path.exists("USER_GUIDE.md"): pyinstaller_args.append(f"--add-data=USER_GUIDE.md{separator}.")
 
     if platform.system() == "Windows":
         version_file = create_version_file(new_version)

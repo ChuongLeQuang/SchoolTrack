@@ -24,11 +24,14 @@ class ClassService:
         VI: Lấy đường dẫn tuyệt đối đến thư mục data, an toàn khi đóng gói PyInstaller.
         """
         if getattr(sys, 'frozen', False):
+            # For packaged app, data dir is next to the executable
             project_root = os.path.dirname(sys.executable)
+            data_dir = os.path.join(project_root, "data")
         else:
+            # For development, it's in the source tree
             project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+            data_dir = os.path.join(project_root, "apps", "main_app", "data")
         
-        data_dir = os.path.join(project_root, "apps", "main_app", "data")
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
         return data_dir
@@ -227,7 +230,10 @@ class ClassService:
             return False
         import openpyxl
         wb = openpyxl.load_workbook(file_path)
-        if wave_name in wb.sheetnames:
+        
+        # Kiểm tra trùng lặp không phân biệt hoa thường và khoảng trắng thừa
+        normalized_new_name = ' '.join(wave_name.lower().split())
+        if any(' '.join(s.lower().split()) == normalized_new_name for s in wb.sheetnames):
             wb.close()
             return False
         ws = wb.create_sheet(wave_name)
@@ -252,7 +258,12 @@ class ClassService:
         
         import openpyxl
         wb = openpyxl.load_workbook(file_path)
-        if old_wave_name not in wb.sheetnames or new_wave_name in wb.sheetnames:
+        if old_wave_name not in wb.sheetnames:
+            wb.close()
+            return False
+            
+        normalized_new_name = ' '.join(new_wave_name.lower().split())
+        if any(' '.join(s.lower().split()) == normalized_new_name for s in wb.sheetnames if s != old_wave_name):
             wb.close()
             return False
             

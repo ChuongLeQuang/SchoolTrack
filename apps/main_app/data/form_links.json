@@ -7,7 +7,8 @@
                 "LNH0526NEA",
                 "LNH0526NEB",
                 "LNH0526NDA",
-                "LNH0526NDB"
+                "LNH0526NDB",
+                "LNH0626NGA"
             ]
         },
         "Đợt 2 - 1026": {
@@ -16,6 +17,13 @@
             "classes": [
                 "LNH1026NGA",
                 "LNH1026NQA"
+            ]
+        },
+        "Tất cả": {
+            "form_link": "",
+            "sheet_link": "",
+            "classes": [
+                "LNH0626NQA"
             ]
         }
     }

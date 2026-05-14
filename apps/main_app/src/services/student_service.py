@@ -19,11 +19,14 @@ class StudentService:
         VI: Lấy đường dẫn tuyệt đối đến thư mục data, an toàn khi đóng gói PyInstaller.
         """
         if getattr(sys, 'frozen', False):
+            # For packaged app, data dir is next to the executable
             project_root = os.path.dirname(sys.executable)
+            data_dir = os.path.join(project_root, "data")
         else:
+            # For development, it's in the source tree
             project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+            data_dir = os.path.join(project_root, "apps", "main_app", "data")
         
-        data_dir = os.path.join(project_root, "apps", "main_app", "data")
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
         return data_dir

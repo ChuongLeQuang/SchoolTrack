@@ -52,7 +52,7 @@ def test_count_registrations_from_file(mock_load_excel) -> None:
         {"Cột khác": "Không có mã"}
     ]
     
-    counts = RegistrationService.count_registrations_from_file("dummy.xlsx")
+    counts, warnings = RegistrationService.count_registrations_from_file("dummy.xlsx", mode=1, students_db=None)
     
     assert len(counts) == 2
     assert counts["LNH0526NEA"] == 2
