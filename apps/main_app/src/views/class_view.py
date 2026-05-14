@@ -3,7 +3,8 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 from PyQt6.QtCore import Qt, QSettings
 from apps.main_app.src.services.class_service import ClassService
 from apps.main_app.src.views.class_planning_tab import ClassPlanningTab
-from apps.main_app.src.views.accounting_sync_tab import AccountingSyncTab
+from apps.main_app.src.views.class_accounting_tab import ClassAccountingTab
+from apps.main_app.src.services.class_wave_metadata_service import WaveMetadataService
 
 
 class ClassView(QWidget):
@@ -94,7 +95,7 @@ class ClassView(QWidget):
         
         self.inner_stack = QStackedWidget()
         self.planning_tab = ClassPlanningTab(self)
-        self.accounting_tab = AccountingSyncTab(self)
+        self.accounting_tab = ClassAccountingTab(self)
         self.inner_stack.addWidget(self.planning_tab)
         self.inner_stack.addWidget(self.accounting_tab)
         self.inner_stack.addWidget(self._setup_tab_finalization())
@@ -136,7 +137,7 @@ class ClassView(QWidget):
         self.cb_wave.clear()
         current_year = self.cb_academic_year.currentText()
         if current_year and current_year != "Chưa có dữ liệu":
-            waves = ClassService.get_waves_for_year(current_year)
+            waves = WaveMetadataService.get_waves_for_year(current_year)
             if waves:
                 waves = [w for w in waves if w != "Tất cả"]
             if waves:
@@ -162,6 +163,10 @@ class ClassView(QWidget):
         self.is_data_loaded = True
 
     def create_new_year(self) -> None:
+        """
+        EN: Create a new academic year Excel file.
+        VI: Tạo file Excel mới cho một Niên khóa.
+        """
         year, ok = QInputDialog.getText(self, "Tạo Niên Khóa", "Nhập niên khóa mới (VD: 2025-2026):")
         if ok and year.strip():
             year = year.strip()
@@ -177,6 +182,10 @@ class ClassView(QWidget):
                 QMessageBox.warning(self, "Lỗi", f"Không thể tạo file:\n{e}")
 
     def create_new_wave(self) -> None:
+        """
+        EN: Create a new wave (sheet) for the current year.
+        VI: Tạo Đợt khai giảng mới (Sheet mới) cho Niên khóa hiện tại.
+        """
         current_year = self.cb_academic_year.currentText()
         if not current_year or current_year == "Chưa có dữ liệu":
             QMessageBox.warning(self, "Cảnh báo", "Vui lòng tạo/chọn Niên khóa trước!")
@@ -195,6 +204,10 @@ class ClassView(QWidget):
                 QMessageBox.warning(self, "Lỗi", f"Không thể tạo đợt mới:\n{e}")
 
     def rename_current_wave(self) -> None:
+        """
+        EN: Rename the currently selected wave.
+        VI: Đổi tên Đợt đang được chọn.
+        """
         current_year = self.cb_academic_year.currentText()
         current_wave = self.cb_wave.currentText()
         if not current_year or current_year == "Chưa có dữ liệu" or not current_wave or current_wave == "Chưa có đợt":
@@ -218,6 +231,10 @@ class ClassView(QWidget):
                 QMessageBox.critical(self, "Lỗi nghiêm trọng", f"Không thể đổi tên đợt:\n{e}")
 
     def delete_current_wave(self) -> None:
+        """
+        EN: Delete the currently selected wave.
+        VI: Xóa Đợt đang được chọn.
+        """
         current_year = self.cb_academic_year.currentText()
         current_wave = self.cb_wave.currentText()
         if not current_year or current_year == "Chưa có dữ liệu" or not current_wave or current_wave == "Chưa có đợt":

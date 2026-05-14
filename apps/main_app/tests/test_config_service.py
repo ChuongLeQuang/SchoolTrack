@@ -1,7 +1,7 @@
 import pytest
 import json
 import os
-from apps.main_app.src.services.config_service import ConfigService
+from apps.main_app.src.services.core_config_service import ConfigService
 
 
 def test_get_class_templates(tmp_path) -> None:

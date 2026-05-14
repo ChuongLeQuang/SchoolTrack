@@ -73,6 +73,10 @@ def calculate_area(radius: float) -> float:
   - `controllers/` hoặc `views/` → xử lý request/response (nếu là web app).
   - `config/` → chứa các file thiết lập cấu hình ứng dụng.
 - File Python đặt tên theo `snake_case.py`.
+- **Quy chuẩn Đặt tên khi Tách File (Semantic Naming)**: Khi một file phình to và cần chia tách, tuyệt đối KHÔNG đặt tên chắp vá làm mất bối cảnh. Bắt buộc giữ nguyên cấu trúc thư mục phẳng hiện tại nhưng áp dụng công thức **[Tiền tố Miền nghiệp vụ]_[Tên chức năng]_[Hậu tố Vai trò].py** để các file cùng nghiệp vụ luôn đứng cạnh nhau theo bảng chữ cái.
+  - *Tiền tố (Domain)*: `class_`, `student_`, `accounting_`...
+  - *Hậu tố (Role)*: `_view.py` (Màn hình chính), `_tab.py` (Thẻ con), `_widget.py` (Thành phần UI), `_dialog.py` (Cửa sổ nổi).
+  - *Ví dụ chuẩn*: `class_tab_planning.py`, `class_widget_links.py`.
 - Thư mục `tests/` chứa unit test, file test đặt tên `test_<module>.py` tương ứng với file trong `src/`.
 
 ---
@@ -195,3 +199,17 @@ Những nguyên tắc này được đúc kết từ các sự cố nghiêm tr�
   - *Nguyên tắc*: Tuyệt đối tuân thủ Kiến trúc Phân tầng. Không được phép nhồi nhét UI hoặc Logic của module này (VD: Làm giàu dữ liệu Sinh viên) vào bên trong module khác (VD: Quản lý Lớp học). Nếu một tệp vượt quá 500 dòng, bắt buộc dừng lại để chia tách (Refactor).
 - **Rải bẫy Đo lường Hiệu năng (Performance Trapping)**: 
   - *Nguyên tắc*: Đối với các tác vụ "nặng đô" (như đọc/ghi Excel lớn, gọi API), bắt buộc phải chèn các hàm ghi log thời gian thực (timestamps) tại các điểm nút (Milestones). Đề phòng trường hợp ứng dụng "chết lâm sàng" không văng Exception (Silent Crash), dòng log cuối cùng sẽ ngay lập tức chỉ điểm rò rỉ hiệu năng.
+- **Chống Lạm dụng Mocking & Ưu tiên Kiểm thử Tích hợp (Anti-Mocking Abuse & Integration Testing)**:
+  - *Hạn chế Mock File System*: Khi kiểm thử các luồng Đọc/Ghi dữ liệu (Excel, JSON), hạn chế tối đa việc dùng `@patch` để làm giả thư viện. Ưu tiên dùng `tmp_path` của `pytest` để tạo file vật lý thật, nhằm kiểm chứng tính xác thực 100% của thư viện bên dưới (VD: `openpyxl`).
+  - *Bật Strict Mock*: Đối với các thành phần bắt buộc phải làm giả (API mạng, UI Components), lệnh `@patch` **bắt buộc** phải đi kèm tham số `autospec=True`. Cơ chế này ép đối tượng giả phải có cấu trúc y hệt đối tượng thật, dập tắt hoàn toàn rủi ro "gọi sai tên hàm (AttributeError) nhưng test vẫn báo Pass".
+
+---
+
+## 11. AI Output Generation & Diff Discipline / Kỷ luật sinh mã và vá lỗi
+Để tránh các lỗi khi áp dụng mã nguồn (patching/merging) do IDE từ chối hoặc bị tràn giới hạn token, AI bắt buộc tuân thủ:
+
+- **Tuyệt đối không viết tắt trong Diff (No Elision)**: Trong các khối mã `diff`, tuyệt đối không sử dụng `...`, `pass`, hoặc comment đại diện để thay thế cho code hiện có chưa được sửa đổi. Phải cung cấp bối cảnh (context) một cách rõ ràng và liền mạch.
+- **Sao chép nguyên trạng bối cảnh (Exact Context Matching)**: Các dòng code không thay đổi (context lines) và các dòng bị xóa (bắt đầu bằng dấu `-`) phải được sao chép **chính xác 100%** từ file gốc (bao gồm cả thụt lề, khoảng trắng). Không tự ý sửa lỗi chính tả hay định dạng ở các dòng bối cảnh này.
+- **Gộp khối vá (Single Diff Block per File)**: Nếu cần thay đổi nhiều vị trí trong cùng một tệp, bắt buộc phải gộp chúng vào **một khối `diff` duy nhất** (sử dụng nhiều phần `@@ ... @@`), tuyệt đối không tách ra thành nhiều khối diff riêng biệt cho cùng một tệp.
+- **Phân rã Output (Output Chunking)**: Nếu một tính năng yêu cầu tạo mới/sửa đổi từ 3 file trở lên, HOẶC tổng số dòng code thay đổi vượt quá 150 dòng, AI **tuyệt đối không được nhồi nhét tất cả vào một lần trả lời**. Phải chủ động chia nhỏ việc giao code thành nhiều đợt (Ví dụ: *"Phần 1: Models & Utils. Lưu lại và gõ 'Tiếp' để nhận Phần 2"*).
+- **Giới hạn bối cảnh (Strict Context Limit)**: Khi sử dụng chuẩn `diff`, chỉ được in ra tối đa **3 đến 5 dòng code cũ (context lines)** ở trên và dưới đoạn mã cần sửa. Tuyệt đối không in lại toàn bộ các hàm không liên quan hoặc cả một file dài chỉ để sửa một vài chỗ, nhằm tiết kiệm bộ nhớ output token.

@@ -3,11 +3,11 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QMessageBox, QFileDialog, QApplication)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
-from apps.main_app.src.services.registration_service import RegistrationService
+from apps.main_app.src.services.class_registration_service import RegistrationService
 from apps.main_app.src.services.student_service import StudentService
 
 
-class AccountingSyncTab(QWidget):
+class ClassAccountingTab(QWidget):
     """
     EN: Tab for syncing and reconciling accounting data with Google Form registrations.
     VI: Tab đối chiếu Kế toán với kết quả đăng ký từ Google Form.

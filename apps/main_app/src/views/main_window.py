@@ -6,9 +6,9 @@ import sys
 import logging
 import markdown
 from apps.main_app.src.views.student_view import StudentView
-from apps.main_app.src.views.data_enrichment_view import DataEnrichmentView
+from apps.main_app.src.views.student_enrichment_view import StudentEnrichmentView
 from apps.main_app.src.views.class_view import ClassView
-from apps.main_app.src.views.help_dialog import HelpDialog
+from apps.main_app.src.views.core_help_dialog import HelpDialog
 
 
 class MainWindow(QMainWindow):
@@ -159,7 +159,7 @@ class MainWindow(QMainWindow):
         self.student_view = StudentView()
         
         # --- Screen 2: Data Enrichment View ---
-        self.data_enrichment_view = DataEnrichmentView()
+        self.data_enrichment_view = StudentEnrichmentView()
         
         # --- Screen 3: Class Management View ---
         self.class_view = ClassView()

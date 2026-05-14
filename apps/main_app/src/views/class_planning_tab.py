@@ -10,10 +10,12 @@ import webbrowser
 from datetime import datetime
 import re
 from apps.main_app.src.services.class_service import ClassService
+from apps.main_app.src.services.core_google_api_service import GoogleApiService
+from apps.main_app.src.services.class_wave_metadata_service import WaveMetadataService
 from apps.main_app.src.models.entities import ClassInfo
 from apps.main_app.src.views.class_dialog import ClassDialog
-from apps.main_app.src.services.registration_service import RegistrationService
-from apps.main_app.src.views.gas_config_dialog import GASConfigDialog
+from apps.main_app.src.services.class_registration_service import RegistrationService
+from apps.main_app.src.views.class_links_widget import ClassLinksWidget
 
 
 class ClassPlanningTab(QWidget):
@@ -85,40 +87,8 @@ class ClassPlanningTab(QWidget):
 
         layout.addLayout(toolbar_layout)
 
-        links_group = QGroupBox("🔗 Cấu hình Link Đăng Ký (Gắn liền với Đợt)")
-        links_config_layout = QVBoxLayout()
-        
-        row1 = QHBoxLayout()
-        self.txt_form_link = QLineEdit()
-        self.txt_form_link.setPlaceholderText("🔗 Link Google Form")
-        self.btn_open_link = QPushButton("🌐 Mở Form")
-        self.btn_open_link.clicked.connect(self.open_form_link)
-        row1.addWidget(self.txt_form_link)
-        row1.addWidget(self.btn_open_link)
-        
-        row2 = QHBoxLayout()
-        self.txt_sheet_link = QLineEdit()
-        self.txt_sheet_link.setPlaceholderText("📊 Link Google Sheet")
-        self.btn_open_sheet = QPushButton("🌐 Mở Sheet")
-        self.btn_open_sheet.clicked.connect(self.open_sheet_link)
-        self.btn_download_sheet = QPushButton("📥 Tải File")
-        self.btn_download_sheet.clicked.connect(self.download_sheet_file)
-        self.btn_save_links = QPushButton("💾 Lưu Cấu Hình Link")
-        self.btn_save_links.clicked.connect(self.save_wave_links)
-        
-        row2.addWidget(self.txt_sheet_link)
-        row2.addWidget(self.btn_open_sheet)
-        row2.addWidget(self.btn_download_sheet)
-        row2.addWidget(self.btn_save_links)
-        
-        self.btn_gas_config = QPushButton("⚙️ Cấu hình API Google Form")
-        self.btn_gas_config.clicked.connect(self.open_gas_config_dialog)
-        
-        links_config_layout.addLayout(row1)
-        links_config_layout.addLayout(row2)
-        links_config_layout.addWidget(self.btn_gas_config, alignment=Qt.AlignmentFlag.AlignRight)
-        links_group.setLayout(links_config_layout)
-        layout.addWidget(links_group)
+        self.links_widget = ClassLinksWidget(self)
+        layout.addWidget(self.links_widget)
 
         self.table = QTableWidget()
         headers = ["Chọn", "Mã Lớp", "Tên Lớp", "Địa Điểm", "Phòng Học", "Buổi Học", "Lịch Học", "Giờ Học", "Khai Giảng", "Kết Thúc", "SL Min", "SL Max", "Đăng Ký"]
@@ -141,17 +111,10 @@ class ClassPlanningTab(QWidget):
         self.current_wave = wave
         
         is_all_waves = wave == "Tất cả"
-        for widget in [self.txt_form_link, self.txt_sheet_link, self.btn_save_links, 
-                       self.btn_auto_form, self.btn_add, self.btn_edit, self.btn_delete, self.btn_import_google_form]:
+        for widget in [self.btn_auto_form, self.btn_add, self.btn_edit, self.btn_delete, self.btn_import_google_form]:
             widget.setEnabled(not is_all_waves)
             
-        if is_all_waves:
-            self.txt_form_link.setText("")
-            self.txt_sheet_link.setText("")
-        else:
-            links = ClassService.get_wave_links(year, wave)
-            self.txt_form_link.setText(links.get("form_link", ""))
-            self.txt_sheet_link.setText(links.get("sheet_link", ""))
+        self.links_widget.load_data(year, wave)
 
         if not year or year == "Chưa có dữ liệu" or not wave or wave == "Chưa có đợt":
             self.lbl_stats.setText("Trạng thái: Chưa có dữ liệu Lớp học.")
@@ -165,7 +128,7 @@ class ClassPlanningTab(QWidget):
 
         try:
             all_classes = ClassService.get_classes_from_excel(file_path, None)
-            display_classes = all_classes if is_all_waves else [c for c in all_classes if c.class_code in ClassService.get_class_codes_for_wave(year, wave)]
+            display_classes = all_classes if is_all_waves else [c for c in all_classes if c.class_code in WaveMetadataService.get_class_codes_for_wave(year, wave)]
             
             self.table.setUpdatesEnabled(False)
             self.table.setRowCount(0)
@@ -218,10 +181,6 @@ class ClassPlanningTab(QWidget):
                 match = search_text in code.text().lower() or search_text in name.text().lower()
                 self.table.setRowHidden(row, not match)
 
-    def open_gas_config_dialog(self) -> None:
-        dialog = GASConfigDialog(self)
-        dialog.exec()
-        
     def copy_for_google_form(self) -> None:
         """
         EN: Copy selected classes to clipboard.
@@ -276,13 +235,12 @@ class ClassPlanningTab(QWidget):
         reply = QMessageBox.question(self, "Xác nhận", f"Hệ thống sẽ ra lệnh nhân bản Form Mẫu để tạo Form mới cho đợt '{self.current_wave}' với {len(selected_classes)} lớp học.\n\nQuá trình này có thể mất khoảng 10-15 giây. Bạn có muốn tiếp tục?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-            response = ClassService.auto_create_google_form(web_app_url, secret, template_id, self.current_wave, selected_classes)
+            response = GoogleApiService.auto_create_google_form(web_app_url, secret, template_id, self.current_wave, selected_classes)
             QApplication.restoreOverrideCursor()
             
             if response.get("status") == "success":
-                self.txt_form_link.setText(response.get("form_url", ""))
-                self.txt_sheet_link.setText(response.get("sheet_url", ""))
-                self.save_wave_links()
+                self.links_widget.set_links(response.get("form_url", ""), response.get("sheet_url", ""))
+                self.links_widget.save_wave_links()
                 QMessageBox.information(self, "Thành công", f"Đã tự động tạo Form và Sheet thành công cho '{self.current_wave}'!\nLink đã được lưu vào hệ thống.")
             else:
                 QMessageBox.critical(self, "Lỗi API", f"Không thể tạo Form:\n{response.get('message', 'Lỗi không xác định hoặc cấu hình sai')}")

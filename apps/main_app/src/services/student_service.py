@@ -5,7 +5,7 @@ import re
 from typing import List, Any, Dict
 from datetime import datetime, date
 from apps.main_app.src.models.entities import Student
-from apps.main_app.src.services.excel_service import ExcelService
+from apps.main_app.src.services.core_excel_service import ExcelService
 
 
 class StudentService:
@@ -48,7 +48,10 @@ class StudentService:
         if os.path.exists(file_path):
             try:
                 with open(file_path, "r", encoding="utf-8") as f: existing = json.load(f)
-            except Exception: pass
+            except (FileNotFoundError, json.JSONDecodeError): 
+                # EN: Safe fallback if pending_updates file is missing or corrupted.
+                # VI: Bỏ qua an toàn nếu file JSON cập nhật đang chờ bị thiếu hoặc lỗi cấu trúc.
+                pass
         
         for u in updates:
             if not any(e["msv"] == u["msv"] and e["type"] == u["type"] and e["new_val"] == u["new_val"] for e in existing):
@@ -65,7 +68,7 @@ class StudentService:
         Returns the number of new updates found.
         """
         import openpyxl
-        from apps.main_app.src.utils.name_matcher import NameMatcher
+        from apps.main_app.src.utils.core_name_matcher import NameMatcher
         
         wb = openpyxl.load_workbook(file_path, read_only=True)
         sheet_names = wb.sheetnames

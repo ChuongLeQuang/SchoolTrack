@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
 from PyQt6.QtCore import QDate, Qt
 from PyQt6.QtGui import QIcon, QPixmap
 from apps.main_app.src.models.entities import ClassInfo
-from apps.main_app.src.services.config_service import ConfigService
+from apps.main_app.src.services.core_config_service import ConfigService
 
 
 class ClassDialog(QDialog):

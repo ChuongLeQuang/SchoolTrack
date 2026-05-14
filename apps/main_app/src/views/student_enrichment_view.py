@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from apps.main_app.src.services.student_service import StudentService
 
-class DataEnrichmentView(QWidget):
+class StudentEnrichmentView(QWidget):
     """
     EN: View for Data Enrichment (scanning and reviewing form updates).
     VI: Màn hình Làm giàu Dữ liệu (quét và duyệt thông tin mới từ Form).

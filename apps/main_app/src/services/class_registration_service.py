@@ -1,8 +1,8 @@
 import re
 from typing import List, Dict, Any, Tuple
-from apps.main_app.src.services.excel_service import ExcelService
-from apps.main_app.src.utils.text_utils import TextUtils
-from apps.main_app.src.utils.name_matcher import NameMatcher
+from apps.main_app.src.services.core_excel_service import ExcelService
+from apps.main_app.src.utils.core_text_utils import TextUtils
+from apps.main_app.src.utils.core_name_matcher import NameMatcher
 
 
 class RegistrationService:

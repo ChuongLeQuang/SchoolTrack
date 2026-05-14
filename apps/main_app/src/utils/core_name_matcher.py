@@ -2,7 +2,7 @@ import unicodedata
 import re
 import difflib
 from typing import Tuple
-from apps.main_app.src.utils.text_utils import TextUtils
+from apps.main_app.src.utils.core_text_utils import TextUtils
 
 
 class NameMatcher:

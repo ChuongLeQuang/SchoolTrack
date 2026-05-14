@@ -32,7 +32,9 @@ class ConfigService:
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
+        except (FileNotFoundError, json.JSONDecodeError, PermissionError) as e:
+            # EN: Catch specific file reading/parsing errors to fallback to default empty dict.
+            # VI: Bắt lỗi cụ thể khi file cấu hình không tồn tại hoặc lỗi cú pháp JSON.
             return {}
 
     @staticmethod
@@ -45,7 +47,9 @@ class ConfigService:
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
             return True
-        except Exception:
+        except (OSError, PermissionError) as e:
+            # EN: Catch file system errors during save operation.
+            # VI: Bắt lỗi hệ thống tập tin khi lưu cấu hình.
             return False
 
     @staticmethod

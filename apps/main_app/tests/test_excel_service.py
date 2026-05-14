@@ -2,7 +2,7 @@ import os
 import openpyxl
 import pytest
 from unittest.mock import MagicMock
-from apps.main_app.src.services.excel_service import ExcelService
+from apps.main_app.src.services.core_excel_service import ExcelService
 
 
 def test_load_excel_data_file_not_found():
