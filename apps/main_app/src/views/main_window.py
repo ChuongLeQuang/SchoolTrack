@@ -6,6 +6,7 @@ import sys
 import logging
 import markdown
 from apps.main_app.src.views.student_view import StudentView
+from apps.main_app.src.views.data_enrichment_view import DataEnrichmentView
 from apps.main_app.src.views.class_view import ClassView
 from apps.main_app.src.views.help_dialog import HelpDialog
 
@@ -72,10 +73,31 @@ class MainWindow(QMainWindow):
                 padding: 10px 15px; text-align: left; font-size: 16px; font-weight: bold;
             }
         """
+        sub_button_style = """
+            QPushButton { 
+                padding: 8px 15px 8px 45px; text-align: left; font-size: 14px;
+                border: none; background-color: transparent; color: #4B5563;
+            }
+            QPushButton:hover { background-color: #E5E7EB; border-radius: 4px; color: #1F2937; font-weight: bold;}
+        """
         for btn in [btn_dashboard, btn_students, btn_classes, btn_user_guide]:
             btn.setStyleSheet(button_style)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             sidebar_layout.addWidget(btn)
+
+            if btn == btn_students:
+                self.sub_menu_students = QWidget()
+                sub_layout_st = QVBoxLayout(self.sub_menu_students)
+                sub_layout_st.setContentsMargins(0, 0, 0, 0)
+                sub_layout_st.setSpacing(5)
+                self.btn_sub_st_list = QPushButton("📝  1. Danh sách Sinh viên")
+                self.btn_sub_st_enrich = QPushButton("✨  2. Làm giàu Dữ liệu")
+                for sub_btn in [self.btn_sub_st_list, self.btn_sub_st_enrich]:
+                    sub_btn.setStyleSheet(sub_button_style)
+                    sub_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                    sub_layout_st.addWidget(sub_btn)
+                self.sub_menu_students.setVisible(False)
+                sidebar_layout.addWidget(self.sub_menu_students)
 
             if btn == btn_classes:
                 # Sub-menu cho Quản lý Lớp học (Accordion)
@@ -88,13 +110,6 @@ class MainWindow(QMainWindow):
                 self.btn_sub_sync = QPushButton("💰  2. Đối chiếu Kế toán")
                 self.btn_sub_final = QPushButton("✅  3. Chốt Lớp & Phân bổ")
                 
-                sub_button_style = """
-                    QPushButton { 
-                        padding: 8px 15px 8px 45px; text-align: left; font-size: 14px;
-                        border: none; background-color: transparent; color: #4B5563;
-                    }
-                    QPushButton:hover { background-color: #E5E7EB; border-radius: 4px; color: #1F2937; font-weight: bold;}
-                """
                 for sub_btn in [self.btn_sub_plan, self.btn_sub_sync, self.btn_sub_final]:
                     sub_btn.setStyleSheet(sub_button_style)
                     sub_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -143,13 +158,17 @@ class MainWindow(QMainWindow):
         # --- Screen 1: Student Management View ---
         self.student_view = StudentView()
         
-        # --- Screen 2: Class Management View ---
+        # --- Screen 2: Data Enrichment View ---
+        self.data_enrichment_view = DataEnrichmentView()
+        
+        # --- Screen 3: Class Management View ---
         self.class_view = ClassView()
         
         # Add screens to stack
         self.content_stack.addWidget(self.dashboard_view)  # Index 0
         self.content_stack.addWidget(self.student_view)    # Index 1
-        self.content_stack.addWidget(self.class_view)      # Index 2
+        self.content_stack.addWidget(self.data_enrichment_view) # Index 2
+        self.content_stack.addWidget(self.class_view)      # Index 3
         
         content_layout.addWidget(self.content_stack)
         
@@ -163,21 +182,28 @@ class MainWindow(QMainWindow):
 
         # --- Connect Sidebar Buttons to Stacked Widget ---
         btn_dashboard.clicked.connect(lambda: self.content_stack.setCurrentIndex(0))
-        btn_students.clicked.connect(lambda: self.content_stack.setCurrentIndex(1))
+        
+        def toggle_student_menu():
+            is_visible = self.sub_menu_students.isVisible()
+            self.sub_menu_students.setVisible(not is_visible)
+            self.content_stack.setCurrentIndex(1)
+        btn_students.clicked.connect(toggle_student_menu)
+        self.btn_sub_st_list.clicked.connect(lambda: self.content_stack.setCurrentIndex(1))
+        self.btn_sub_st_enrich.clicked.connect(lambda: [self.content_stack.setCurrentIndex(2), self.data_enrichment_view.load_data()])
         
         # Logic ẩn/hiện menu Lớp học
         def toggle_class_menu():
             is_visible = self.sub_menu_classes.isVisible()
             self.sub_menu_classes.setVisible(not is_visible)
-            self.content_stack.setCurrentIndex(2)
+            self.content_stack.setCurrentIndex(3)
             if not is_visible:
                 self.class_view.set_active_screen(0) # Mở tab 1 mặc định
                 
         btn_classes.clicked.connect(toggle_class_menu)
         
-        self.btn_sub_plan.clicked.connect(lambda: [self.content_stack.setCurrentIndex(2), self.class_view.set_active_screen(0)])
-        self.btn_sub_sync.clicked.connect(lambda: [self.content_stack.setCurrentIndex(2), self.class_view.set_active_screen(1)])
-        self.btn_sub_final.clicked.connect(lambda: [self.content_stack.setCurrentIndex(2), self.class_view.set_active_screen(2)])
+        self.btn_sub_plan.clicked.connect(lambda: [self.content_stack.setCurrentIndex(3), self.class_view.set_active_screen(0)])
+        self.btn_sub_sync.clicked.connect(lambda: [self.content_stack.setCurrentIndex(3), self.class_view.set_active_screen(1)])
+        self.btn_sub_final.clicked.connect(lambda: [self.content_stack.setCurrentIndex(3), self.class_view.set_active_screen(2)])
         
         btn_user_guide.clicked.connect(self._open_user_guide)
 
@@ -233,7 +259,7 @@ class MainWindow(QMainWindow):
         if index == 1: # Student View
             if not self.student_view.is_data_loaded:
                 self.student_view.load_data()
-        elif index == 2: # Class View
+        elif index == 3: # Class View
             if not self.class_view.is_data_loaded:
                 self.class_view.load_data()
 

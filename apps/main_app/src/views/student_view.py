@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QPixmap
 import os
+import time
 import sys
 import logging
 from datetime import datetime
@@ -110,6 +111,8 @@ class StudentView(QWidget):
         EN: Load student data from Excel and populate the table.
         VI: Đọc dữ liệu sinh viên từ file Excel và điền vào bảng.
         """
+        start_t = time.time()
+        logging.info("=========================================")
         logging.info("⏳ Đang tiến hành đọc file Excel, vui lòng đợi...")
         
         # Sử dụng đường dẫn tuyệt đối để đảm bảo luôn tìm thấy file
@@ -118,6 +121,10 @@ class StudentView(QWidget):
         
         try:
             students = StudentService.get_students_from_excel(file_path)
+            
+            # Tối ưu hóa UI: Tắt cập nhật giao diện để tránh đơ app do ResizeToContents
+            self.table.setUpdatesEnabled(False)
+            self.table.setRowCount(0) # Xóa sạch ô cũ
             self.table.setRowCount(len(students))
             
             for row_idx, student in enumerate(students):
@@ -154,17 +161,22 @@ class StudentView(QWidget):
                     
                 self.table.setItem(row_idx, 7, item_status)
                 
+            # Bật lại cập nhật giao diện và áp dụng lại bộ lọc nếu có
+            self.table.setUpdatesEnabled(True)
+            self.filter_table()
+                
             # Thống kê chi tiết số lượng theo trạng thái
             dang_hoc = sum(1 for s in students if s.study_status.lower() == "đang học")
             tam_nghi = sum(1 for s in students if s.study_status.lower() == "tạm nghỉ")
             nghi_hoc = sum(1 for s in students if s.study_status.lower() == "nghỉ học")
             self.lbl_stats.setText(f"Tổng số: {len(students)} sinh viên (đang học: {dang_hoc} | tạm nghỉ: {tam_nghi} | nghỉ học: {nghi_hoc})")
             self.is_data_loaded = True
+            logging.info(f"✅ Bảng dữ liệu cập nhật UI xong. Tổng thời gian UI: {time.time() - start_t:.2f}s")
         except Exception as e:
             logging.error(f"[LỖI TẢI DỮ LIỆU]: {e}")
             QMessageBox.warning(self, "Lỗi tải dữ liệu", f"Không thể tải dữ liệu từ Excel:\n{e}")
 
-    def filter_table(self) -> None:
+    def filter_table(self, text: str = "") -> None:
         """
         EN: Filter the table based on search text and status selection.
         VI: Lọc dữ liệu bảng dựa trên từ khóa tìm kiếm và trạng thái.

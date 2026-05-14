@@ -399,7 +399,8 @@ class ClassService:
         if wave_name in wb.sheetnames:
             sheet = wb[wave_name]
             if not (sheet.title.startswith("_") or "filter" in sheet.title.lower()):
-                headers = [str(sheet.cell(row=1, column=c).value).strip().lower() if sheet.cell(row=1, column=c).value else "" for c in range(1, sheet.max_column + 1)]
+                raw_headers = ExcelService._get_headers(sheet)
+                headers = [h.lower() for h in raw_headers]
                 
                 code_col_idx = -1
                 for i, h in enumerate(headers):
@@ -417,7 +418,8 @@ class ClassService:
                         count_col_idx = sheet.max_column + 1
                         sheet.cell(row=1, column=count_col_idx, value="SL Hiện tại")
                     
-                    for row_num in range(2, sheet.max_row + 1):
+                    actual_max_row = ExcelService._get_actual_max_row(sheet, len(headers))
+                    for row_num in range(2, actual_max_row + 1):
                         cell_val = sheet.cell(row=row_num, column=code_col_idx).value
                         if cell_val is not None:
                             code_val = str(cell_val).strip()

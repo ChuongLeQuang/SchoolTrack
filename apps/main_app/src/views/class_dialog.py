@@ -167,7 +167,7 @@ class ClassDialog(QDialog):
             elif "chiều" in session_lower: self.cb_time_slot.setCurrentText("14:00 - 16:00")
             elif "tối" in session_lower: self.cb_time_slot.setCurrentText("18:00 - 20:00")
 
-    def _on_template_changed(self) -> None:
+    def _on_template_changed(self, index: int = 0) -> None:
         """Tự động điền thông tin dựa trên mẫu lớp (Level) được chọn."""
         level_code = self.cb_template.currentData()
         if level_code and level_code in self.templates:
@@ -181,7 +181,7 @@ class ClassDialog(QDialog):
             self.sb_max.setValue(tpl.get("max", 30))
         self._update_generated_code()
 
-    def _update_generated_code(self) -> None:
+    def _update_generated_code(self, qdate=None) -> None:
         """Logic tự sinh Mã 10 ký tự: LNH + MM + YY + Level + Hậu tố (A, B, C...)"""
         if self.is_edit_mode:
             return

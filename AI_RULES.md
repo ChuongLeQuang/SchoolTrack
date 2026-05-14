@@ -180,3 +180,18 @@ def test_calculate_area():
 - **License File**: Bất kỳ dự án hoặc module mã nguồn mở nào được khởi tạo cũng phải đi kèm một tệp giấy phép rõ ràng ở thư mục gốc.
 - **Copyright Header**: Đối với các dự án nội bộ doanh nghiệp hoặc dự án thương mại, các file mã nguồn quan trọng nên có một đoạn chú thích bản quyền ở phần đầu của file.
 - **Tuân thủ Dependency**: Khi sử dụng thư viện bên thứ 3 (trong `requirements.txt`), phải đảm bảo quy định sử dụng của chúng không xung đột với định hướng của dự án gốc.
+
+---
+
+## 10. Blood Rules / Nguyên tắc xương máu từ thực tiễn
+Những nguyên tắc này được đúc kết từ các sự cố nghiêm trọng (treo máy, sập luồng, phình to kiến trúc) trong quá trình phát triển thực tế, bắt buộc AI/Dev phải kiểm tra trước khi viết code:
+
+- **Xử lý I/O Phòng thủ & Kiểm thử Dữ liệu Bẩn (Defensive I/O & Dirty Testing)**: 
+  - *Nguyên tắc*: Không bao giờ tin tưởng tuyệt đối vào ranh giới dữ liệu do thư viện bên thứ 3 báo cáo (VD: `openpyxl.max_row` có thể lên tới 1 triệu dòng do lỗi format của người dùng). Bắt buộc phải tự viết các cơ chế "Cắt tỉa" (Trim) hoặc "Ngắt tự động" (Break - ngắt sau 50 dòng/20 cột trống). 
+  - *Kiểm thử*: Các bài Unit Test cho Service xử lý dữ liệu bắt buộc phải có kịch bản test "Dữ liệu rác" để kiểm chứng khả năng chịu đựng của hệ thống.
+- **Tối ưu hóa Cập nhật UI Hàng loạt (Bulk Update Optimization)**: 
+  - *Nguyên tắc*: Khi thêm/xóa/sửa số lượng lớn phần tử trên giao diện (`QTableWidget`, `QListWidget`), **bắt buộc** phải khóa luồng render (`setUpdatesEnabled(False)`), dọn dẹp bộ nhớ đệm (`setRowCount(0)`), bơm dữ liệu, sau đó mới mở khóa render. Điều này ngăn chặn lỗi "ngạt thở" UI do tính năng tự động co giãn (`ResizeToContents`) bị kích hoạt hàng triệu phép tính thừa.
+- **Ranh giới Nghiệp vụ Nghiêm ngặt (Strict Domain Boundaries)**: 
+  - *Nguyên tắc*: Tuyệt đối tuân thủ Kiến trúc Phân tầng. Không được phép nhồi nhét UI hoặc Logic của module này (VD: Làm giàu dữ liệu Sinh viên) vào bên trong module khác (VD: Quản lý Lớp học). Nếu một tệp vượt quá 500 dòng, bắt buộc dừng lại để chia tách (Refactor).
+- **Rải bẫy Đo lường Hiệu năng (Performance Trapping)**: 
+  - *Nguyên tắc*: Đối với các tác vụ "nặng đô" (như đọc/ghi Excel lớn, gọi API), bắt buộc phải chèn các hàm ghi log thời gian thực (timestamps) tại các điểm nút (Milestones). Đề phòng trường hợp ứng dụng "chết lâm sàng" không văng Exception (Silent Crash), dòng log cuối cùng sẽ ngay lập tức chỉ điểm rò rỉ hiệu năng.

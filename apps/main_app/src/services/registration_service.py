@@ -2,6 +2,7 @@ import re
 from typing import List, Dict, Any, Tuple
 from apps.main_app.src.services.excel_service import ExcelService
 from apps.main_app.src.utils.text_utils import TextUtils
+from apps.main_app.src.utils.name_matcher import NameMatcher
 
 
 class RegistrationService:
@@ -171,6 +172,18 @@ class RegistrationService:
                         if mode in [2, 3]: # Chế độ Cảnh báo hoặc Thông minh (nhưng sửa không được)
                             warnings.append(f"- SV '{full_name}' nhập sai MSV: '{student_id or 'Trống'}'")
                         continue # Lọc cứng: Luôn luôn bỏ qua nếu MSV vẫn không hợp lệ
+                        
+                # BỘ LỌC KÉP: Xác thực danh tính để quyết định có cho phép Đăng ký Lớp học không
+                if student_key and student_key in valid_msv:
+                    db_student = valid_msv[student_key]
+                    
+                    is_match, match_type, score = NameMatcher.compare_names_hybrid(full_name, db_student.full_name)
+                    
+                    if is_match:
+                        pass # Được phép đăng ký
+                    else:
+                        warnings.append(f"- Từ chối SV '{full_name}' do tên không khớp hồ sơ gốc '{db_student.full_name}' (Độ khớp: {score*100:.1f}%, MSV: {student_key})")
+                        continue # Khóa, từ chối toàn bộ đăng ký
             else:
                 if not student_key: student_key = f"UNKNOWN_STUDENT_{idx}"
             

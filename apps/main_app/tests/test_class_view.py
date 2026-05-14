@@ -12,7 +12,7 @@ def qapp():
     return app
 
 
-@patch("apps.main_app.src.views.class_view.ClassService.get_classes_from_excel")
+@patch("apps.main_app.src.views.class_planning_tab.ClassService.get_classes_from_excel")
 def test_class_view_initialization(mock_get_classes, qapp) -> None:
     """
     EN: Test ClassView initialization and table columns (including Checkbox).
@@ -21,5 +21,5 @@ def test_class_view_initialization(mock_get_classes, qapp) -> None:
     mock_get_classes.return_value = []
     view = ClassView()
     
-    assert view.table.columnCount() == 13
-    assert view.table.horizontalHeaderItem(0).text() == "Chọn"
+    assert view.planning_tab.table.columnCount() == 13
+    assert view.planning_tab.table.horizontalHeaderItem(0).text() == "Chọn"

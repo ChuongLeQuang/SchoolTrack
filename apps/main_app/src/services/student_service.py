@@ -1,6 +1,8 @@
 import os
 import sys
-from typing import List
+import json
+import re
+from typing import List, Any, Dict
 from datetime import datetime, date
 from apps.main_app.src.models.entities import Student
 from apps.main_app.src.services.excel_service import ExcelService
@@ -34,6 +36,93 @@ class StudentService:
     @staticmethod
     def get_file_path() -> str:
         return os.path.join(StudentService.get_data_dir(), "Danh Sach SV.xlsx")
+
+    @staticmethod
+    def get_pending_updates_file() -> str:
+        return os.path.join(StudentService.get_data_dir(), "pending_updates.json")
+
+    @staticmethod
+    def save_pending_updates(updates: List[Dict[str, str]]) -> None:
+        file_path = StudentService.get_pending_updates_file()
+        existing = []
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, "r", encoding="utf-8") as f: existing = json.load(f)
+            except Exception: pass
+        
+        for u in updates:
+            if not any(e["msv"] == u["msv"] and e["type"] == u["type"] and e["new_val"] == u["new_val"] for e in existing):
+                existing.append(u)
+                
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(existing, f, indent=4, ensure_ascii=False)
+
+    @staticmethod
+    def scan_form_for_enrichment(file_path: str, students_db: List[Student]) -> int:
+        """
+        EN: Scan Google Form for new info and generate pending updates.
+        VI: Quét Google Form để tìm thông tin mới và tạo danh sách chờ duyệt.
+        Returns the number of new updates found.
+        """
+        import openpyxl
+        from apps.main_app.src.utils.name_matcher import NameMatcher
+        
+        wb = openpyxl.load_workbook(file_path, read_only=True)
+        sheet_names = wb.sheetnames
+        wb.close()
+        
+        raw_data = []
+        for sheet in sheet_names:
+            data = ExcelService.load_excel_data(file_path, sheet_name=sheet)
+            if data:
+                raw_data = data
+                break
+                
+        valid_msv = {str(s.student_id).strip().upper(): s for s in students_db}
+        
+        def get_val(row_dict: dict, keys: list) -> Any:
+            for k, v in row_dict.items():
+                if not k: continue
+                k_lower = str(k).lower()
+                for key in keys:
+                    if key.lower() in k_lower: return v
+            return None
+            
+        pending_updates = []
+        for row in raw_data:
+            student_id = get_val(row, ["mã sinh viên", "mã sv", "msv"])
+            if student_id:
+                student_id = str(student_id).strip()
+                if student_id.endswith(".0"): student_id = student_id[:-2]
+            
+            full_name = get_val(row, ["họ & tên", "họ tên", "họ và tên"]) or "Không rõ tên"
+            student_key = str(student_id).strip().upper() if student_id else ""
+            
+            if student_key and student_key in valid_msv:
+                db_student = valid_msv[student_key]
+                is_match, match_type, score = NameMatcher.compare_names_hybrid(full_name, db_student.full_name)
+                
+                if is_match:
+                    if match_type == "V2_MATCH" and full_name != db_student.full_name:
+                        pending_updates.append({"msv": student_key, "type": "Tên", "old_val": db_student.full_name, "new_val": full_name})
+                        
+                    row_phone_raw = str(get_val(row, ["số điện thoại", "phone", "sđt"]) or "").strip()
+                    if row_phone_raw.endswith(".0"): row_phone_raw = row_phone_raw[:-2]
+                    row_phone = re.sub(r'\D', '', row_phone_raw)
+                    if row_phone and len(row_phone) >= 9:
+                        db_phones = [re.sub(r'\D', '', p) for p in str(db_student.phone_number).split(",")]
+                        if row_phone not in db_phones:
+                            pending_updates.append({"msv": student_key, "type": "SĐT", "old_val": str(db_student.phone_number), "new_val": row_phone_raw})
+                            
+                    row_email = str(get_val(row, ["email"]) or "").strip()
+                    if row_email and "@" in row_email and "." in row_email:
+                        db_emails = [e.strip().lower() for e in str(db_student.email).split(",")]
+                        if row_email.lower() not in db_emails:
+                            pending_updates.append({"msv": student_key, "type": "Email", "old_val": str(db_student.email), "new_val": row_email})
+                            
+        if pending_updates:
+            StudentService.save_pending_updates(pending_updates)
+        return len(pending_updates)
 
     @staticmethod
     def get_students_from_excel(file_path: str) -> List[Student]:
@@ -92,18 +181,27 @@ class StudentService:
                 ten = str(get_val(row, ["tên"]) or "").strip()
                 full_name = f"{ho} {ten}".strip()
 
-            # Xử lý Số điện thoại (Excel thường ép kiểu số và mất số 0 ở đầu)
-            phone_val = str(get_val(row, ["số điện thoại", "sđt", "điện thoại", "phone"]) or "").strip()
-            if phone_val.endswith(".0"): phone_val = phone_val[:-2]
-            if phone_val and not phone_val.startswith("0") and phone_val.isdigit():
-                phone_val = "0" + phone_val
+            # Xử lý Email (Hỗ trợ danh sách email cách nhau bằng dấu phẩy)
+            email_raw = str(get_val(row, ["email"]) or "").strip()
+            emails = [e.strip() for e in email_raw.split(",") if e.strip()]
+            email_val = ", ".join(emails)
+
+            # Xử lý Số điện thoại (Hỗ trợ danh sách SĐT cách nhau bằng dấu phẩy, chống lỗi ép kiểu số của Excel)
+            phone_val_raw = str(get_val(row, ["số điện thoại", "sđt", "điện thoại", "phone"]) or "").strip()
+            phones = []
+            for p in phone_val_raw.split(","):
+                p = p.strip()
+                if p.endswith(".0"): p = p[:-2]
+                if p and not p.startswith("0") and p.isdigit(): p = "0" + p
+                if p: phones.append(p)
+            phone_val = ", ".join(phones)
 
             # Tạo đối tượng Student
             student = Student(
                 student_id=str(student_id).strip(),
                 full_name=full_name,
                 date_of_birth=dob,
-                email=str(get_val(row, ["email"]) or "").strip(),
+                email=email_val,
                 phone_number=phone_val,
                 study_status=str(get_val(row, ["trạng thái học tập", "trạng thái"]) or "Đang học").strip(),
                 tuition_balance=tuition_balance

@@ -87,8 +87,8 @@ Tài liệu này định nghĩa chi tiết về cấu trúc dữ liệu, luồng
     - Cập nhật `ExcelService`: Hỗ trợ đọc/ghi danh sách phân cách bằng dấu phẩy (VD: `090123, 090456`).
     - Cập nhật bộ lọc Thông minh (Tab 1, Tab 2): Chuyển logic từ so sánh chuỗi bằng (==) sang kiểm tra tồn tại trong mảng (in).
   - **Luồng xử lý (Thuật toán "Bộ lọc Kép")**:
-    - **Vòng 1 (Xác thực ưu tiên - Giữ dấu)**: Chuyển tên Form và tên DB về chữ thường, chuẩn hóa bảng mã Unicode (NFC), *giữ nguyên dấu*. Dùng `difflib` chấm điểm. Khớp >= 95% -> Chấp nhận đăng ký (vượt qua vòng xác thực).
-    - **Vòng 2 (Vớt vát - Gọt dấu & Đề xuất sửa tên)**: Nếu Vòng 1 < 95%, đưa cả 2 tên qua "Máy mài" (`text_utils.py`) để *gọt sạch dấu* và so sánh lại.
+    - **Vòng 1 (Xác thực ưu tiên - Giữ dấu)**: Chuyển tên Form và tên DB về chữ thường, chuẩn hóa bảng mã Unicode (NFC), *giữ nguyên dấu* (Dùng module mới `name_matcher.py`). Dùng `difflib` chấm điểm. Khớp >= 95% -> Chấp nhận đăng ký (vượt qua vòng xác thực).
+    - **Vòng 2 (Vớt vát - Gọt dấu & Đề xuất sửa tên)**: Nếu Vòng 1 < 95%, đưa cả 2 tên qua "Máy mài" để *gọt sạch dấu* và so sánh lại.
       - Khớp >= 95% (sau khi gọt dấu): Vẫn chấp nhận đăng ký. ĐỒNG THỜI, đưa vào hàng đợi `[Đề xuất Sửa Tên]` để Admin quyết định có lấy tên có dấu trên Form đè lên tên không dấu trong DB hay không.
       - Khớp < 95% (kể cả sau khi gọt dấu): Khóa, từ chối bản đăng ký vì nghi ngờ sai người/mượn MSV.
     - Quét SĐT/Email (Làm giàu): Dùng Regex kiểm tra SĐT/Email. Nếu là thông tin MỚI chưa có trong hệ thống -> Đưa vào hàng đợi đề xuất Thêm vào (Append).
@@ -96,6 +96,26 @@ Tài liệu này định nghĩa chi tiết về cấu trúc dữ liệu, luồng
     - Lưu trữ trung gian: Kết quả quét được lưu ngầm vào `data/pending_updates.json` để Admin có thể dừng duyệt bất cứ lúc nào và tiếp tục vào ngày hôm sau.
     - Giao diện: Tạo một Dialog hiển thị danh sách dạng bảng: `[MSV] | [Loại thay đổi] | [Thông tin Cũ] ➡️ [Thông tin Mới] | [Nút Duyệt] [Nút Bỏ Qua]`.
     - Hành động: Khi nhấn "Duyệt", hệ thống cập nhật thẳng vào file `Danh Sach SV.xlsx` và xóa dòng đó khỏi file JSON. Nếu chọn "Bỏ qua", chỉ xóa khỏi JSON, tuyệt đối không ảnh hưởng đến lượt đăng ký lớp hợp lệ của sinh viên.
+  - **WBS (Work Breakdown Structure) Chi Tiết**:
+    - **Task 1: Tạo Lõi so sánh tên (Utils)**
+      - Tạo file mới `src/utils/name_matcher.py` để xử lý so sánh tên (Không sửa `text_utils.py` để tránh break code cũ).
+      - Viết hàm `normalize_for_strict_match` (Vòng 1: NFC, chữ thường).
+      - Viết hàm `compare_names_hybrid` xử lý luồng Vòng 1 & Vòng 2.
+    - **Task 2: Cấu trúc hóa SĐT/Email & Lõi Quét Làm Giàu (Service)**
+      - Cập nhật `student_service.py` (`get_students_from_excel`) để đọc và gom SĐT/Email thành danh sách phân cách dấu phẩy.
+      - Thêm hàm `scan_form_for_enrichment` độc lập trong `StudentService` để quy hoạch đúng miền nghiệp vụ Sinh viên.
+    - **Task 3: Trả lại sự trong sạch cho Registration Service (Refactor)**
+      - Bóc tách toàn bộ mã quét SĐT/Email/Tên ra khỏi `registration_service.py`. Service này chỉ tập trung vào việc đếm số lượng đăng ký lớp học (áp dụng `name_matcher.py` để xác thực), không can thiệp sửa đổi hồ sơ sinh viên.
+    - **Task 4: Xây dựng Sub-menu & Trạm Kiểm Duyệt (UI)**
+      - Tạo file mới `data_enrichment_view.py` chứa giao diện quét và duyệt.
+      - Thêm Sub-menu "2. Làm giàu Dữ liệu" vào mục "Quản lý Sinh viên" trong Sidebar của `main_window.py`.
+  - **Báo cáo Đối chiếu chéo (Cross-Audit)**:
+    | Yêu cầu Thiết kế | Task WBS tương ứng | Trạng thái |
+    | --- | --- | --- |
+    | Tách biệt code, không ảnh hưởng logic cũ | Task 1 (`name_matcher.py`) | ✅ Pass |
+    | Bộ lọc Kép (Giữ dấu -> Gọt dấu) | Task 1 + Task 3 | ✅ Pass |
+    | Làm giàu SĐT/Email an toàn | Task 2 + Task 3 | ✅ Pass |
+    | Giao diện duyệt có khả năng lưu dở dang | Task 3 (Ghi JSON) + Task 4 (Đọc JSON/UI) | ✅ Pass |
 - [ ] Quản lý Giáo viên
 - [ ] Quản lý Tài chính nâng cao
 - [ ] Export Thống kê & Báo cáo
