@@ -80,6 +80,22 @@ Tài liệu này định nghĩa chi tiết về cấu trúc dữ liệu, luồng
 - [ ] Màn hình Quản lý Lớp học: Tab 3 - Chốt Lớp & Phân bổ (Mở/Hủy lớp)
 
 ### Bước 3: Mở rộng sau này
+- [ ] **Data Enrichment (Tự động làm giàu hồ sơ Sinh viên từ Form)**:
+  - **Mục tiêu**: Lợi dụng quá trình sinh viên điền Google Form để thu thập thêm Số điện thoại, Email mới và làm sạch dữ liệu Họ Tên (hỗ trợ chuyển từ không dấu thành có dấu chuẩn chỉnh).
+  - **Thay đổi Cấu trúc (Data Model)**:
+    - Cập nhật entity `Student`: Các trường `phone_number` và `email` chuyển từ chuỗi (`str`) sang mảng (`List[str]`).
+    - Cập nhật `ExcelService`: Hỗ trợ đọc/ghi danh sách phân cách bằng dấu phẩy (VD: `090123, 090456`).
+    - Cập nhật bộ lọc Thông minh (Tab 1, Tab 2): Chuyển logic từ so sánh chuỗi bằng (==) sang kiểm tra tồn tại trong mảng (in).
+  - **Luồng xử lý (Thuật toán "Bộ lọc Kép")**:
+    - **Vòng 1 (Xác thực ưu tiên - Giữ dấu)**: Chuyển tên Form và tên DB về chữ thường, chuẩn hóa bảng mã Unicode (NFC), *giữ nguyên dấu*. Dùng `difflib` chấm điểm. Khớp >= 95% -> Chấp nhận đăng ký (vượt qua vòng xác thực).
+    - **Vòng 2 (Vớt vát - Gọt dấu & Đề xuất sửa tên)**: Nếu Vòng 1 < 95%, đưa cả 2 tên qua "Máy mài" (`text_utils.py`) để *gọt sạch dấu* và so sánh lại.
+      - Khớp >= 95% (sau khi gọt dấu): Vẫn chấp nhận đăng ký. ĐỒNG THỜI, đưa vào hàng đợi `[Đề xuất Sửa Tên]` để Admin quyết định có lấy tên có dấu trên Form đè lên tên không dấu trong DB hay không.
+      - Khớp < 95% (kể cả sau khi gọt dấu): Khóa, từ chối bản đăng ký vì nghi ngờ sai người/mượn MSV.
+    - Quét SĐT/Email (Làm giàu): Dùng Regex kiểm tra SĐT/Email. Nếu là thông tin MỚI chưa có trong hệ thống -> Đưa vào hàng đợi đề xuất Thêm vào (Append).
+  - **UX/UI (Trạm Kiểm Duyệt)**:
+    - Lưu trữ trung gian: Kết quả quét được lưu ngầm vào `data/pending_updates.json` để Admin có thể dừng duyệt bất cứ lúc nào và tiếp tục vào ngày hôm sau.
+    - Giao diện: Tạo một Dialog hiển thị danh sách dạng bảng: `[MSV] | [Loại thay đổi] | [Thông tin Cũ] ➡️ [Thông tin Mới] | [Nút Duyệt] [Nút Bỏ Qua]`.
+    - Hành động: Khi nhấn "Duyệt", hệ thống cập nhật thẳng vào file `Danh Sach SV.xlsx` và xóa dòng đó khỏi file JSON. Nếu chọn "Bỏ qua", chỉ xóa khỏi JSON, tuyệt đối không ảnh hưởng đến lượt đăng ký lớp hợp lệ của sinh viên.
 - [ ] Quản lý Giáo viên
 - [ ] Quản lý Tài chính nâng cao
 - [ ] Export Thống kê & Báo cáo
